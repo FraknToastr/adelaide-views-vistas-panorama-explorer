@@ -1,0 +1,28 @@
+{
+  "status": "complete",
+  "note": "",
+  "exported_views": 90,
+  "exported_files": 270,
+  "exported_by_type": {
+    "Points": 90,
+    "Viewsheds": 90,
+    "Frustums": 90
+  },
+  "export_layout": "Location / Points | Viewsheds | Frustums / one OBJ per VIEW_ID and available geometry type",
+  "source_collection": "AVV_Generated",
+  "source_crs": "EPSG:7854",
+  "lod_source_frame": "RAW_ENH",
+  "scene_origin": {
+    "easting_m": "281849.6765341535",
+    "northing_m": "6134404.409386028",
+    "height_m": "0.0"
+  },
+  "obj_axes": {
+    "forward": "+Y",
+    "up": "+Z",
+    "scale": 1.0
+  },
+  "obj_coordinates": "EPSG:7854 projected Easting/Northing in metres, provided original LOD placement was correct",
+  "alignment_verified": false,
+  "warning": "Export does not prove surveyed LOD alignment or height datum. No reprojection is performed."
+}

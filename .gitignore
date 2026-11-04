@@ -1,0 +1,36 @@
+# Local photographs and original capture media must never be uploaded.
+/Adelaide Park Lands View and Vistas sample 5.1-5.3 260828/
+*.[jJ][pP][gG]
+*.[jJ][pP][eE][gG]
+*.[pP][nN][gG]
+*.[wW][eE][bB][pP]
+*.[tT][iI][fF]
+*.[tT][iI][fF][fF]
+*.[hH][eE][iI][cC]
+*.[hH][eE][iI][fF]
+*.[aA][vV][iI][fF]
+*.[dD][nN][gG]
+*.[rR][aA][wW]
+*.[iI][nN][sS][pP]
+*.[iI][nN][sS][vV]
+*.[mM][pP]4
+*.[mM][oO][vV]
+# User import archives are local; only the bundled geometry sample is versioned.
+/FW__*.zip
+*:Zone.Identifier
+# Credentials, agent state, dependencies and generated artifacts.
+.env
+.env.*
+.aws/
+.codex/
+.agents/
+.vistas-git/
+node_modules/
+__pycache__/
+*.pyc
+*.log
+coverage/
+test-results/
+playwright-report/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,11 @@
+{
+  "name": "adelaide-views-vistas-panorama-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Static browser app for shapefile viewpoints, equirectangular panoramas, and EPSG:7854 OBJ overlays",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tests/browser.mjs"
+  }
+}

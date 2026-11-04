@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f2e9">
+  <title>Views &amp; Vistas · Adelaide Park Lands</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/shpjs@6.2.0/dist/shp.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/proj4@2.15.0/dist/proj4.js"></script>
+  <script type="importmap">
+    {"imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    }}
+  </script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="header">
+      <button class="icon-button layers-toggle" id="layersBtn" aria-label="Layers" title="Layers" aria-expanded="true" aria-controls="layersPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 17l9 5 9-5"/></svg></button>
+      <a class="brand" href="./" aria-label="Views and Vistas home"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 40 40"><path d="M6 29c0-12 7-19 25-21-1 17-8 25-20 25M11 33l15-17M17 27l-1-9m7 3 8 1"/></svg></span><span><strong>Views &amp; Vistas</strong><small>Adelaide Park Lands</small></span></a>
+      <button class="button primary" id="importBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 17v3h16v-3"/></svg>Import data</button>
+    </header>
+    <main class="workspace" id="workspace">
+      <aside class="sidebar" id="layersPanel" aria-label="Layer selector">
+        <div class="sidebar-heading"><h1>Layers</h1><button class="icon-button" id="closeLayers" title="Close layers" aria-label="Close layers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+        <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="locationSearch" type="search" placeholder="Find a location" aria-label="Find a location"></label>
+        <div class="bulk-actions"><button id="expandAll" class="text-button" aria-expanded="false">Expand all</button><span class="bulk-separator" aria-hidden="true">/</span><button id="layerSelectionToggle" class="text-button" aria-pressed="true">Select none</button><span aria-hidden="true">/</span><button id="zoomToSelection" class="text-button" title="Frame the selected location and its spatial layers" disabled>Zoom to selection</button></div>
+        <div class="layer-tree" id="layerTree"></div>
+        <div class="sidebar-empty" id="layersEmpty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v12H3z"/></svg><button class="text-button" id="sidebarImportBtn">Import data</button></div>
+      </aside>
+      <button class="sidebar-scrim" id="sidebarScrim" aria-label="Close layers" tabindex="-1"></button>
+      <section class="pane map-pane" aria-label="Interactive map">
+        <div id="map" aria-label="Map of Adelaide viewpoints"></div>
+        <div class="map-top">
+          <div class="basemap-tabs" role="group" aria-label="Basemap"><button class="basemap-btn" data-base="aerial" aria-pressed="true">Aerial</button><button class="basemap-btn" data-base="topo" aria-pressed="false">Topographic</button><button class="basemap-btn" data-base="metro" aria-pressed="false">MetroMap</button></div>
+          <button class="icon-button surface" id="metroKeyBtn" title="MetroMap API key" aria-label="MetroMap API key"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="15" cy="8" r="5"/><path d="m11 12-8 8v-4l2-2h3l1-3"/></svg></button>
+        </div>
+        <div class="map-side"><button class="icon-button surface" id="fitBtn" title="Fit locations" aria-label="Fit locations"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/></svg></button><button class="icon-button surface" id="pitchBtn" title="Toggle 3D map view" aria-label="Toggle 3D map view" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-9 5 9 5 9-5-9-5ZM3 13l9 5 9-5M3 18l9 5 9-5"/></svg></button></div>
+      </section>
+      <section class="pane pano-pane" aria-label="360 degree panorama viewer">
+        <div id="panoCanvas" class="pano-canvas"></div>
+        <div id="photoCompass" class="photo-compass hidden" aria-hidden="true"><span class="photo-compass-line"></span><span id="photoCompassBearing" class="photo-compass-bearing"></span></div>
+        <div class="pano-empty" id="panoEmpty"><div class="panorama-emblem" aria-hidden="true"><span>360°</span><svg viewBox="0 0 180 70"><ellipse cx="90" cy="35" rx="82" ry="25"/><path d="m161 19 12 8-14 5"/></svg></div><h2 id="emptyMessage">Panorama</h2><button class="button secondary" id="emptyImportBtn">Import data</button></div>
+        <div class="pano-header hidden" id="panoHeader"><div><h2 id="panoTitle"></h2><span id="panoPlace"></span></div></div>
+        <div class="pano-bottom hidden" id="panoFooter">
+          <div class="control-group photo-navigation"><button class="icon-button" id="prevView" title="Previous photo" aria-label="Previous photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button><button class="icon-button" id="nextView" title="Next photo" aria-label="Next photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button></div>
+          <div class="control-group heading-controls"><span class="control-label">Heading</span><button class="icon-button" id="headingMinus" title="Calibrate heading −5°" aria-label="Calibrate heading minus 5 degrees">−</button><output id="headingValue" aria-label="Heading calibration">0°</output><button class="icon-button" id="headingPlus" title="Calibrate heading +5°" aria-label="Calibrate heading plus 5 degrees">+</button><button class="icon-button heading-step" id="headingStepToggle" title="Heading step: 5°. Switch to 1°." aria-label="Heading step: 5 degrees. Switch to 1 degree.">5°</button></div>
+          <div class="control-group"><button class="icon-button" id="photoCompassToggle" title="Show centre compass line" aria-label="Show centre compass line" aria-pressed="false" aria-controls="photoCompass"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m12 5 3 9-3-2-3 2 3-9ZM12 14v5"/></svg></button><button class="icon-button" id="resetView" title="Reset view" aria-label="Reset view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 3v5h5"/></svg></button><button class="icon-button" id="panoFullscreen" title="Fullscreen panorama" aria-label="Fullscreen panorama"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5m6 0h5v5M20 15v5h-5M9 20H4v-5"/></svg></button></div>
+        </div>
+        <div id="panoLoading" class="pano-loading hidden" role="status">Loading…</div>
+      </section>
+    </main>
+  </div>
+  <dialog id="importModal" class="modal" aria-labelledby="importHeading">
+    <div class="modal-top"><h2 id="importHeading">Import data</h2><button class="icon-button" data-close="importModal" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <div class="import-list">
+      <div class="import-row"><div><strong>Viewpoints &amp; view cones</strong><span class="import-feedback" id="spatialFeedback" role="status"></span></div><label class="choose-file">Files / ZIP<input type="file" id="spatialInput" accept=".zip,.shp,.dbf,.shx,.prj,.cpg" multiple></label></div>
+      <div class="import-row"><div><strong>360° photographs</strong><span class="import-feedback" id="photosFeedback" role="status"></span></div><label class="choose-file">Folder<input type="file" id="photosInput" accept=".jpg,.jpeg,.png,.webp" webkitdirectory directory multiple></label></div>
+      <div class="import-row"><div><strong>3D OBJ layers</strong><span class="import-feedback" id="objFeedback" role="status"></span></div><div class="import-choices"><label class="choose-file">Files / ZIP<input type="file" id="objInput" accept=".obj,.zip,.json,.mtl" multiple></label><label class="choose-file secondary">Folder<input type="file" id="objFolderInput" webkitdirectory directory multiple></label></div></div>
+      <div class="import-row"><div><strong>Reference JSON</strong><span class="import-feedback" id="referenceFeedback" role="status"></span></div><label class="choose-file">File<input type="file" id="referenceInput" accept=".json"></label></div>
+    </div>
+    <div class="modal-actions"><button class="text-button" id="loadObjSample">Load Park 10 OBJ sample</button><button class="button primary" data-close="importModal">Done</button></div>
+  </dialog>
+  <dialog id="metroModal" class="modal compact" aria-labelledby="metroHeading">
+    <div class="modal-top"><h2 id="metroHeading">MetroMap access</h2><button class="icon-button" data-close="metroModal" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <label class="form-label" for="metroKeyInput">API key</label><input id="metroKeyInput" class="text-input" type="password" autocomplete="off">
+    <label class="checkline"><input type="checkbox" id="rememberMetro"> Remember key in this browser</label>
+    <div class="modal-actions"><button class="text-button" id="forgetMetro">Forget key</button><button class="button primary" id="applyMetro">Apply key</button></div><div class="import-feedback" id="metroFeedback" role="status"></div>
+  </dialog>
+  <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+</body>
+</html>
