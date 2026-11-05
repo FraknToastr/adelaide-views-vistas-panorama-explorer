@@ -43,16 +43,33 @@ export function setLayersVisible(layers,visibility,enabled) {
   for (const layer of layers) visibility.set(layer.id,enabled);
 }
 
+/** Keep only the latest action per scope; imports use the latest matching action. */
+export class VisibilityIntents {
+  constructor(){this.sequence=0;this.rules=new Map();}
+  key({locationId=null,source=null,kind=null}){return JSON.stringify([locationId,source,kind]);}
+  set(scope,enabled){this.rules.set(this.key(scope),{sequence:++this.sequence,enabled:!!enabled});}
+  resolve(layer,locationId,fallback=true){
+    let latest=null;
+    for(const scope of [{},{locationId},{source:layer.source},{source:layer.source,kind:layer.kind}]){
+      const rule=this.rules.get(this.key(scope));
+      if(rule&&(!latest||rule.sequence>latest.sequence))latest=rule;
+    }
+    return latest?latest.enabled:fallback;
+  }
+}
+
 /** Newly imported files inherit the user's hidden parent/category intent. */
-export function inheritVisibility(locations,previous,visibility,defaultVisible=true) {
+export function inheritVisibility(locations,previous,visibility,defaultVisible=true,intents=null) {
+  const previousIds=new Set([...previous.values()].flatMap(location=>location.layers.map(layer=>layer.id)));
   for (const location of locations.values()) {
     const old=previous.get(location.id);
     const allHidden=old?.layers.length>0 && old.layers.every(layer=>visibility.get(layer.id)===false);
     for (const layer of location.layers) {
-      if (visibility.has(layer.id)) continue;
+      if (visibility.has(layer.id)&&(!intents||previousIds.has(layer.id))) continue;
       const siblings=old?.layers.filter(item=>item.kind===layer.kind) || [];
       const categoryHidden=siblings.length>0 && siblings.every(item=>visibility.get(item.id)===false);
-      visibility.set(layer.id,allHidden || categoryHidden?false:defaultVisible);
+      const fallback=visibility.get(layer.id)??(allHidden || categoryHidden?false:defaultVisible);
+      visibility.set(layer.id,intents?intents.resolve(layer,location.id,fallback):fallback);
     }
   }
 }

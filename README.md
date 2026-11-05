@@ -24,7 +24,9 @@ Local source files are read in the browser; the application does not upload them
 
 ## Locations and map controls
 
-The **Layers** button opens or closes a simple location sidebar. Search by local/park name or viewpoint ID, then select a location to view its photo. Locations have no expansion buttons or visibility checkboxes. **Zoom to selection** frames the selected location without changing visibility.
+The **Layers** button opens or closes a simple location sidebar. Search by local/park name or viewpoint ID, then select a location name to view its photo. Each location has one checkbox controlling all its shapefile and 3D Model layers, with a mixed state when only some are visible. Locations remain non-expandable. Checking a box does not change the selected photo. **Zoom to selection** frames the selected location without changing visibility.
+
+The sidebar's **Select all / Select none** toggle controls all loaded layers, including locations outside search results and unmatched models. It is disabled when no layers are loaded. Sidebar checkboxes, overall visibility, and map category/group controls stay synchronized. New imports follow the most recent applicable location, category, group or overall visibility action. Visibility choices last for the page session.
 
 One compact map panel contains the basemap buttons, global layer selector, cube **2D/3D** toggle, target **Fit locations** control, **MetroMap API key**, and fullscreen. Search remains in the sidebar. Fullscreen uses the same icon and behaviour as the photo viewer.
 

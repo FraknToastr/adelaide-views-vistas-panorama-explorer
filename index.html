@@ -7,7 +7,7 @@
   <title>Views &amp; Vistas · Adelaide Park Lands</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="css/styles.css?v=20261105-compact2">
+  <link rel="stylesheet" href="css/styles.css?v=20261105-locationvisibility1">
   <script>
     // Report module-graph failures too: these happen before app.js can catch them.
     (()=>{
@@ -36,18 +36,18 @@
     {"imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
-      "./js/app.js": "./js/app.js?v=20261105-compact2",
-      "./js/core.js": "./js/core.js?v=20261105-compact2",
-      "./js/geo.js": "./js/geo.js?v=20261105-compact2",
-      "./js/importers.js": "./js/importers.js?v=20261105-compact2",
-      "./js/layers.js": "./js/layers.js?v=20261105-compact2",
-      "./js/alignment.js": "./js/alignment.js?v=20261105-compact2",
-      "./js/obj-map.js": "./js/obj-map.js?v=20261105-compact2",
-      "./js/panorama.js": "./js/panorama.js?v=20261105-compact2",
-      "./js/appearance.js": "./js/appearance.js?v=20261105-compact2"
+      "./js/app.js": "./js/app.js?v=20261105-locationvisibility1",
+      "./js/core.js": "./js/core.js?v=20261105-locationvisibility1",
+      "./js/geo.js": "./js/geo.js?v=20261105-locationvisibility1",
+      "./js/importers.js": "./js/importers.js?v=20261105-locationvisibility1",
+      "./js/layers.js": "./js/layers.js?v=20261105-locationvisibility1",
+      "./js/alignment.js": "./js/alignment.js?v=20261105-locationvisibility1",
+      "./js/obj-map.js": "./js/obj-map.js?v=20261105-locationvisibility1",
+      "./js/panorama.js": "./js/panorama.js?v=20261105-locationvisibility1",
+      "./js/appearance.js": "./js/appearance.js?v=20261105-locationvisibility1"
     }}
   </script>
-  <script id="appModule" type="module" src="js/app.js?v=20261105-compact2"></script>
+  <script id="appModule" type="module" src="js/app.js?v=20261105-locationvisibility1"></script>
 </head>
 <body>
   <div class="shell">
@@ -68,7 +68,7 @@
             <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="locationSearch" type="search" placeholder="Find a location" aria-label="Find a location"></label>
             <button class="icon-button" id="closeLayers" title="Close layers" aria-label="Close layers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </div>
-          <div class="location-actions"><button id="zoomToSelection" class="text-button" title="Frame the selected location and its spatial layers" disabled>Zoom to selection</button></div>
+          <div class="location-actions"><button id="layerSelectionToggle" class="text-button" aria-pressed="false" disabled>Select all</button><span aria-hidden="true"> / </span><button id="zoomToSelection" class="text-button" title="Frame the selected location and its spatial layers" disabled>Zoom to selection</button></div>
         </fieldset>
         <div class="layer-tree" id="layerTree"></div>
       </aside>

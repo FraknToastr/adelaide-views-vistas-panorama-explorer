@@ -73,6 +73,7 @@ try {
   await page.waitForFunction(()=>{const s=window.vistas.state;return !!s.map?.getLayer('vistas-points');});
   await page.screenshot({path:path.join(artifacts,'empty-desktop.png')});
   assert.equal(await page.locator('#zoomToSelection').isDisabled(),true);
+  assert.equal(await page.locator('#layerSelectionToggle').isDisabled(),true);
   assert.equal(await page.locator('#groundObjLayers').isChecked(),true);
   assert.equal(await page.locator('#groundObjLayers').isDisabled(),true);
   assert.equal(await page.locator('#mapLayerControls input').count(),6);
@@ -90,22 +91,25 @@ try {
     assert.deepEqual(await page.evaluate(()=>{const s=window.vistas.state;return [s.pointRecords.length,s.cones.length,s.locations.size];}),[139,139,90]);
     await page.getByRole('button',{name:'Done',exact:true}).click();
     assert.equal(await page.locator('#layerTree .location-name').count(),90);
-    assert.equal(await page.locator('#layerTree input, #layerTree .disclosure').count(),0);
+    assert.equal(await page.locator('#layerTree input').count(),90);
+    assert.equal(await page.locator('#layerTree .disclosure').count(),0);
     await page.locator('#importBtn').click();
     await page.locator('#photosInput').setInputFiles(path.resolve(root,photoFolder));
     await page.waitForFunction(()=>document.getElementById('photosFeedback').textContent==='Ready');
     assert.deepEqual(await page.evaluate(()=>{const s=window.vistas.state;return [s.photoIndex.size,s.photoViews.length,window.photoDecodes];}),[52,53,0]);
     await page.getByRole('button',{name:'Done',exact:true}).click();
+    await page.locator('.location[data-location="TorRiv.M"] .location-row input').uncheck();
+    assert.equal(await page.locator('#mapLayerControls input').nth(0).evaluate(el=>el.indeterminate),true);
     await page.locator('#importBtn').click();
     await page.locator('#referenceInput').setInputFiles(path.resolve(root,'samples/export_reference.json'));
     await page.waitForFunction(()=>document.getElementById('referenceFeedback').textContent==='Loaded');
     await page.locator('#objInput').setInputFiles(path.resolve(root,'samples/Park_10.zip'));
     await page.waitForFunction(()=>document.getElementById('objFeedback').textContent==='Loaded');
-    assert.deepEqual(await page.evaluate(()=>{const s=window.vistas.state;return [s.obj.loaded.length,s.obj.loaded.filter(e=>e.viewId==='TorRiv.M'&&e.model.visible).length,!!s.map.getLayer(s.obj.layer.id)];}),[9,3,true]);
+    assert.deepEqual(await page.evaluate(()=>{const s=window.vistas.state;return [s.obj.loaded.length,s.obj.loaded.filter(e=>e.viewId==='TorRiv.M'&&e.model.visible).length,!!s.map.getLayer(s.obj.layer.id)];}),[9,0,true]);
     await page.getByRole('button',{name:'Done',exact:true}).click();
     assert.equal(await page.locator('#groundObjLayers').isDisabled(),false);
     assert.equal(await page.locator('#mapLayerControls input:disabled').count(),0);
-    assert.equal(await page.locator('#mapLayerControls input').nth(3).isChecked(),true);
+    assert.equal(await page.locator('#mapLayerControls input').nth(3).evaluate(el=>el.indeterminate),true);
     const alignmentErrors=await page.evaluate(async()=>{
       const THREE=await import('three'),s=window.vistas.state,errors=[];
       const flatten=coords=>typeof coords[0]==='number'?[coords]:coords.flatMap(flatten);
@@ -146,6 +150,7 @@ try {
     await page.locator('#groundObjLayers').uncheck();
     assert.equal(await page.evaluate(()=>window.vistas.state.obj.loaded.every(e=>e.model.position.y===e.sourcePositionY)),true);
     await page.locator('#groundObjLayers').check();
+    await page.locator('.location[data-location="TorRiv.M"] .location-row input').check();
     await page.locator('.location[data-location="TorRiv.M"] .location-name').click();
     await page.waitForFunction(()=>{const s=window.vistas.state;return s.viewer.active && s.viewer.renderer.info.memory.textures===1;});
     assert.equal(await page.evaluate(()=>window.photoDecodes),1);
@@ -211,6 +216,14 @@ try {
     assert.equal(await page.evaluate(()=>window.vistas.state.obj.loaded.some(e=>e.model.visible)),false);
     await page.locator('#mapLayerControls button[data-source="obj"]').click();
     assert.equal(await page.evaluate(()=>window.vistas.state.obj.loaded.every(e=>e.model.visible)),true);
+    // Sidebar bulk actions include entries outside search and synchronize both groups.
+    await page.locator('#layerSelectionToggle').click();
+    assert.equal(await page.locator('#mapLayerControls input:checked').count(),0);
+    assert.equal(await page.locator('#layerTree input:checked').count(),0);
+    await page.locator('#layerSelectionToggle').click();
+    assert.equal(await page.locator('#mapLayerControls input:checked').count(),6);
+    assert.equal(await page.locator('#layerTree input:checked').count(),90);
+    await page.locator('#mapLayersBtn').click();
     await objViewshed.uncheck();
     await page.locator('#groundObjLayers').uncheck();
     await page.locator('[data-base="topo"]').click();

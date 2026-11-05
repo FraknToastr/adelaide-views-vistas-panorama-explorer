@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildLocations,checkboxState,setLayersVisible,inheritVisibility,createPhotoIndex} from '../js/layers.js';
+import {buildLocations,checkboxState,setLayersVisible,inheritVisibility,createPhotoIndex,VisibilityIntents} from '../js/layers.js';
 import {collectPanoramaFiles,readShapefiles} from '../js/importers.js';
 
 const point=(id,extra={})=>({type:'Feature',properties:{VIEW_ID:id,PARK_NAME:'Park 10',...extra},geometry:{type:'Point',coordinates:[138.6,-34.92]}});
@@ -41,6 +41,39 @@ test('importing OBJ files preserves hidden location/category intent',()=>{
   const allOff=new Map(old.get('A').layers.map(l=>[l.id,false]));
   inheritVisibility(next,old,allOff,true);
   assert.equal(allOff.get('obj:Points'),false);
+});
+test('later location, category, group and overall choices win for matching imports only',()=>{
+  const intents=new VisibilityIntents(),viewshed={source:'obj',kind:'viewshed'},point={source:'map',kind:'point'};
+  intents.set({source:'obj'},true);intents.set({locationId:'A'},false);
+  assert.equal(intents.resolve(viewshed,'A'),false);assert.equal(intents.resolve(viewshed,'B'),true);
+  intents.set({source:'obj',kind:'viewshed'},true);
+  assert.equal(intents.resolve(viewshed,'A'),true);assert.equal(intents.resolve(point,'A'),false);
+  intents.set({source:'map'},true);assert.equal(intents.resolve(point,'A'),true);
+  intents.set({},false);assert.equal(intents.resolve(viewshed,'A'),false);assert.equal(intents.resolve(point,'C'),false);
+  intents.set({locationId:'A'},true);assert.equal(intents.resolve(viewshed,'A'),true);assert.equal(intents.resolve(viewshed,'B'),false);
+});
+test('location intent hides new models without changing existing choices on rebuild',()=>{
+  const old=buildLocations([point('A')],[cone('A')]),visibility=new Map(),intents=new VisibilityIntents();
+  intents.set({source:'obj'},true);intents.set({locationId:'A'},false);
+  setLayersVisible(old.get('A').layers,visibility,false);
+  const objects=[{id:'A-model',type:'Viewsheds',viewId:'A',name:'A.obj'},{id:'B-model',type:'Viewsheds',viewId:'B',name:'B.obj'}];
+  const next=buildLocations([point('A'),point('B')],[cone('A')],objects);
+  inheritVisibility(next,old,visibility,true,intents);
+  assert.equal(visibility.get('obj:A-model'),false);assert.equal(visibility.get('obj:B-model'),true);
+  assert.equal(checkboxState(next.get('A').layers,visibility).checked,false);
+  intents.set({source:'obj'},true);
+  const replacement=buildLocations([point('A')],[cone('A')],[{id:'A-new',type:'Frustums',viewId:'A',name:'A-new.obj'}]);
+  inheritVisibility(replacement,next,visibility,true,intents);
+  assert.equal(visibility.get('obj:A-new'),true);assert.equal(visibility.get('point:A'),false);
+  assert.equal(checkboxState(replacement.get('A').layers,visibility).indeterminate,true);
+});
+test('reimported identities follow newer intent and repeated actions keep bounded history',()=>{
+  const intents=new VisibilityIntents(),visibility=new Map([['obj:model',false]]);
+  for(let i=0;i<1000;i++)intents.set({source:'obj'},true);
+  assert.equal(intents.rules.size,1);
+  const locations=buildLocations([],[],[{id:'model',type:'Points',viewId:'A',name:'model.obj'}]);
+  inheritVisibility(locations,new Map(),visibility,true,intents);
+  assert.equal(visibility.get('obj:model'),true);
 });
 test('recursive photo indexing reads metadata only and never guesses ambiguous names',()=>{
   const file=path=>({name:path.split('/').pop(),webkitRelativePath:path,arrayBuffer(){throw Error('Photo was read');},text(){throw Error('Photo was read');}});

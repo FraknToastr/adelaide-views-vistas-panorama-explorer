@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Restore per-location visibility checkboxes and the sidebar Select all/none toggle without expansion; synchronize with map groups/categories and apply the latest matching intent to new imports.
 - Simplify the sidebar to searchable locations; move visibility to global map controls with independent Shapefile/3D Models select-all toggles and future-import category preferences.
 - Combine basemap, layers, 2D/3D, fit, API key and fullscreen controls in a compact map panel; standardize visible model labels as 3D Models.
 - Add map fullscreen with shared panorama behaviour, distinct fit/3D icons, and a six-category map layer widget synchronized with the sidebar.

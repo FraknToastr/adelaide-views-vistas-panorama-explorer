@@ -5,7 +5,7 @@ import {readShapefiles,readObjEntries,collectPanoramaFiles} from './importers.js
 import {PanoramaViewer} from './panorama.js';
 import {ObjMapLayer} from './obj-map.js';
 import {defaultAppearance,loadAppearance,saveAppearance,applyShapeAppearance} from './appearance.js';
-import {buildLocations,checkboxState,setLayersVisible,inheritVisibility,createPhotoIndex} from './layers.js';
+import {buildLocations,checkboxState,setLayersVisible,inheritVisibility,createPhotoIndex,VisibilityIntents} from './layers.js';
 import {prepareViewshed,clipViewshed,cameraSector,sourceSectors} from './alignment.js';
 
 const $=id=>document.getElementById(id);
@@ -49,7 +49,7 @@ function buildAppearanceControls(){
 }
 export const state={
   map:null,obj:null,viewer:null,pointRecords:[],cones:[],locations:new Map(),
-  visibility:new Map(),defaultVisible:true,categoryVisibility:new Map(),checkboxes:[],groupToggles:[],
+  visibility:new Map(),defaultVisible:true,visibilityIntents:new VisibilityIntents(),checkboxes:[],groupToggles:[],
   photoIndex:createPhotoIndex(),photoViews:[],selected:null,direction:null,compassShown:false,headingStep:5,
   base:'aerial',metroKey:'',reference:null,loadingObj:false,selectionSerial:0,spatialSerial:0,
   pointsData:EMPTY,conesData:EMPTY
@@ -113,13 +113,7 @@ function refreshPhotoMatches() {
 function rebuildLocations() {
   const previous=state.locations;
   state.locations=buildLocations(state.pointRecords,state.cones,state.obj?.loaded || []);
-  inheritVisibility(state.locations,previous,state.visibility,state.defaultVisible);
-  const oldIds=new Set([...previous.values()].flatMap(location=>location.layers.map(layer=>layer.id)));
-  for(const location of state.locations.values())for(const layer of location.layers){
-    if(oldIds.has(layer.id))continue;
-    const intent=state.categoryVisibility.get(layer.source+':'+layer.kind)??state.categoryVisibility.get(layer.source+':*');
-    if(intent!==undefined)state.visibility.set(layer.id,intent);
-  }
+  inheritVisibility(state.locations,previous,state.visibility,state.defaultVisible,state.visibilityIntents);
   refreshPhotoMatches();
   renderTree();applyVisibility();
 }
@@ -192,10 +186,10 @@ function updatePhotoCompass() {
     $('photoCompassBearing').textContent=cardinal+' · '+String(degrees).padStart(3,'0')+'°';
   }
 }
-function checkbox(layers,ariaLabel) {
+function checkbox(layers,ariaLabel,scope) {
   const input=document.createElement('input');input.type='checkbox';input.setAttribute('aria-label',ariaLabel);
   state.checkboxes.push({input,layers});
-  input.addEventListener('change',()=>{setLayersVisible(layers,state.visibility,input.checked);applyVisibility();});
+  input.addEventListener('change',()=>{if(scope)state.visibilityIntents.set(scope,input.checked);setLayersVisible(layers,state.visibility,input.checked);applyVisibility();});
   return input;
 }
 function updateCheckboxes() {
@@ -204,6 +198,11 @@ function updateCheckboxes() {
     const all=layers.length>0&&layers.every(layer=>visible(layer.id));
     button.disabled=!layers.length;button.textContent=all?'Select none':'Select all';button.setAttribute('aria-pressed',String(all));
   }
+  const all=[...state.locations.values()].flatMap(location=>location.layers);
+  const selected=all.length>0&&all.every(layer=>visible(layer.id));
+  $('layerSelectionToggle').disabled=!all.length;
+  $('layerSelectionToggle').textContent=selected?'Select none':'Select all';
+  $('layerSelectionToggle').setAttribute('aria-pressed',String(selected));
 }
 function buildMapLayerControls(){
   const container=$('mapLayerControls');container.replaceChildren();state.groupToggles=[];
@@ -215,16 +214,14 @@ function buildMapLayerControls(){
     state.groupToggles.push({button:toggle,layers:groupLayers});
     toggle.onclick=()=>{
       const enabled=!groupLayers.every(layer=>visible(layer.id));
-      state.categoryVisibility.set(source+':*',enabled);
-      for(const kind of ['point','viewshed','frustum','other'])state.categoryVisibility.set(source+':'+kind,enabled);
+      state.visibilityIntents.set({source},enabled);
       setLayersVisible(groupLayers,state.visibility,enabled);applyVisibility();
     };
     group.append(toggle);
     for(const [kind,label] of [['point','Points'],['viewshed','Viewsheds'],['frustum','Frustums']]){
       const row=element('label','map-layer-option');
       const layers=all.filter(layer=>layer.source===source&&layer.kind===kind);
-      const input=checkbox(layers,title+' '+label);
-      input.addEventListener('change',()=>state.categoryVisibility.set(source+':'+kind,input.checked));
+      const input=checkbox(layers,title+' '+label,{source,kind});
       row.append(input,document.createTextNode(label));group.append(row);
       if(source==='map'&&kind==='frustum')row.title='Photo/reference frustums derived from shapefile viewpoints';
     }
@@ -256,7 +253,8 @@ function renderTree() {
     const row=element('div','location-row'),name=element('button','location-name',location.label);name.type='button';
     if(state.selected===location.id)name.setAttribute('aria-current','true');
     if(names.get(location.label)>1||location.label!==location.id)name.append(element('small','',location.id));
-    name.onclick=()=>selectView(location.id);row.append(name);section.append(row);fragment.append(section);
+    const input=checkbox(location.layers,'All layers for '+location.label+' '+location.id,{locationId:location.id});
+    name.onclick=()=>selectView(location.id);row.append(input,name);section.append(row);fragment.append(section);
   }
   tree.replaceChildren(fragment);
   $('zoomToSelection').disabled=!state.locations.has(state.selected);
@@ -418,6 +416,12 @@ function wireUI() {
   $('sidebarScrim').onclick=()=>showSidebar(false);
   $('locationSearch').oninput=filterTree;
   $('zoomToSelection').onclick=zoomToSelection;
+  $('layerSelectionToggle').onclick=()=>{
+    const layers=[...state.locations.values()].flatMap(location=>location.layers);
+    const enabled=!layers.every(layer=>visible(layer.id));
+    state.defaultVisible=enabled;state.visibilityIntents.set({},enabled);
+    setLayersVisible(layers,state.visibility,enabled);applyVisibility();
+  };
   $('groundObjLayers').onchange=e=>state.obj?.setGrounded(e.target.checked);
   for(const btn of document.querySelectorAll('.basemap-btn'))btn.onclick=()=>useBasemap(btn.dataset.base);
   $('fitBtn').onclick=fitLocations;
