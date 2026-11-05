@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import {DEFAULT_CENTER,viewId,photoReference,safeLabel} from './core.js';
-import {registerCRS,boundsFromFeatures,bearingLine,toLngLat} from './geo.js';
+import {registerCRS,boundsFromFeatures,bearingLine} from './geo.js';
 import {readShapefiles,readObjEntries,collectPanoramaFiles} from './importers.js';
 import {PanoramaViewer} from './panorama.js';
 import {ObjMapLayer} from './obj-map.js';
+import {defaultAppearance,loadAppearance,saveAppearance,applyShapeAppearance} from './appearance.js';
 import {buildLocations,LAYER_KINDS,checkboxState,setLayersVisible,inheritVisibility,createPhotoIndex} from './layers.js';
 import {prepareViewshed,clipViewshed,cameraSector,sourceSectors} from './alignment.js';
 
@@ -11,6 +12,42 @@ const $=id=>document.getElementById(id);
 const EMPTY={type:'FeatureCollection',features:[]};
 const METRO_STORAGE='uos.vistas.metromap.key.v1';
 const labels={point:'Point',viewshed:'Viewshed',frustum:'Frustum',other:'Other'};
+let appearance=loadAppearance();
+function updateAppearance(){
+  applyShapeAppearance(state.map,appearance.shape);
+  state.obj?.setAppearance(appearance.obj);
+  saveAppearance(appearance);
+}
+function buildAppearanceControls(){
+  const container=$('appearanceControls');container.replaceChildren();
+  for(const [group,title] of [['obj','3D objects'],['shape','Shapefiles']]){
+    let active='fill';
+    const section=element('section','appearance-section');
+    section.append(element('h2','',title));
+    const row=element('div','appearance-row'),pills=element('div','appearance-pills');
+    pills.setAttribute('role','group');pills.setAttribute('aria-label',title+' appearance target');
+    const color=document.createElement('input');color.type='color';color.id=group+'Color';
+    const slider=document.createElement('input');slider.type='range';slider.min=0;slider.max=100;slider.step=1;slider.id=group+'Transparency';
+    const output=element('output');output.htmlFor=slider.id;
+    const sync=()=>{
+      for(const button of pills.children)button.setAttribute('aria-pressed',String(button.dataset.part===active));
+      color.value=appearance[group][active].color;slider.value=appearance[group][active].transparency;
+      color.setAttribute('aria-label',title+' '+active+' colour');
+      slider.setAttribute('aria-label',title+' '+active+' transparency');
+      output.textContent=slider.value+'%';
+    };
+    for(const part of ['line','fill']){
+      const button=element('button','',part==='line'?'Line':'Fill');button.type='button';button.dataset.part=part;
+      button.onclick=()=>{active=part;sync();};pills.append(button);
+    }
+    color.oninput=()=>{appearance[group][active].color=color.value;updateAppearance();};
+    slider.oninput=()=>{appearance[group][active].transparency=Number(slider.value);if(active==='fill')appearance[group].fill.pointTransparency=Number(slider.value);output.textContent=slider.value+'%';updateAppearance();};
+    row.append(pills,color);
+    const transparency=element('label','appearance-transparency');transparency.htmlFor=slider.id;
+    transparency.append(element('span','','Transparency'),slider,output);
+    section.append(row,transparency);container.append(section);sync();
+  }
+}
 export const state={
   map:null,obj:null,viewer:null,pointRecords:[],cones:[],locations:new Map(),
   visibility:new Map(),defaultVisible:true,expanded:new Set(),checkboxes:[],
@@ -64,7 +101,7 @@ function addMapLayers() {
     {id:'vistas-points',type:'circle',source:'vistas-points',paint:{'circle-radius':['interpolate',['linear'],['zoom'],12,5.2,17,8.1,20,11],'circle-color':'#ffda26','circle-stroke-color':'#182d3b','circle-stroke-width':2.25}}
   ];
   for(const layer of layers)if(!map.getLayer(layer.id))map.addLayer(layer);
-  state.obj?.attach();updateMapSources();updateAlignment();
+  updateAppearance();state.obj?.attach();updateMapSources();updateAlignment();
 }
 function refreshPhotoMatches() {
   state.photoViews=[];
@@ -213,7 +250,7 @@ function renderTree() {
     }
     fragment.append(section);
   }
-  $('layerTree').replaceChildren(fragment);$('layersEmpty').hidden=state.locations.size>0;
+  $('layerTree').replaceChildren(fragment);
   const hasLocations=state.locations.size>0;
   updateSelectionToggle();
   const allExpanded=hasLocations && state.expanded.size===state.locations.size;
@@ -303,12 +340,11 @@ function zoomToSelection() {
   };
   if(location.point)extend(location.point.geometry.coordinates);
   for(const feature of location.cones)extend(feature.geometry.coordinates);
-  if(state.obj?.anchorEN)for(const entry of location.objects) {
+  if(state.obj?.projection)for(const entry of location.objects) {
     const box=new THREE.Box3().setFromObject(entry.model);
     if(box.isEmpty())continue;
-    const [e,n]=state.obj.anchorEN;
-    bounds.extend(toLngLat(e+box.min.x,n+box.min.z));
-    bounds.extend(toLngLat(e+box.max.x,n+box.max.z));
+    bounds.extend(state.obj.projection.toLngLat(box.min.x,box.min.z));
+    bounds.extend(state.obj.projection.toLngLat(box.max.x,box.max.z));
   }
   if(bounds.isEmpty())return;
   state.map.fitBounds(bounds,{padding:50,maxZoom:18,duration:reducedMotion()?0:650});
@@ -371,7 +407,9 @@ function setMetroKey() {
   feedback('metroFeedback','');useBasemap('metro');closeModal('metroModal');
 }
 function wireUI() {
-  for(const id of ['importBtn','emptyImportBtn','sidebarImportBtn'])$(id).onclick=()=>openModal('importModal');
+  buildAppearanceControls();
+  $('resetAppearance').onclick=()=>{appearance=defaultAppearance();buildAppearanceControls();updateAppearance();};
+  $('importBtn').onclick=()=>openModal('importModal');
   $('metroKeyBtn').onclick=()=>openModal('metroModal');
   for(const el of document.querySelectorAll('[data-close]'))el.onclick=()=>closeModal(el.dataset.close);
   for(const dialog of document.querySelectorAll('dialog'))dialog.addEventListener('click',e=>{if(e.target===dialog){const rect=dialog.getBoundingClientRect();if(e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom)dialog.close();}});

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {OBJLoader} from 'three/addons/loaders/OBJLoader.js';
 import {CRS,classifyObj,normalisePath,parseFirstObjVertex,getObjCoordinateFrame,projectedVertex,rebaseObjForMap} from './core.js';
-import {toLngLat} from './geo.js';
+import {createObjProjection} from './geo.js';
 
 const COLOURS={Points:0x346b53,Viewsheds:0x8c9d62,Frustums:0xb0823c,Other:0x6d7e83};
 const MAX_INTERVALS=32;
@@ -9,7 +9,26 @@ const MAX_INTERVALS=32;
 // Only associate files that explicitly encode an ID. Unnamed exports stay unmatched.
 function locationId(name){
   const parts=String(name).replace(/\\/g,'/').split('/').pop().replace(/\.obj$/i,'').split('__');
-  return parts.length>1 && /^(?:points?|viewsheds?|frustums?)$/i.test(parts.at(-1)) ? parts.at(-2).trim() : '';
+  return parts.length>1 && /^(?:points?|viewsheds?|frustums?)$/i.test(parts.at(-1)) ? parts.at(-2).trim() : parts.length===2?parts[1].trim():'';
+}
+
+// v1.3.1 combines categories in one location OBJ; v1.3.2 exports each separately.
+function modelParts(model,name){
+  const type=classifyObj(name);
+  if(type!=='Other'||!locationId(name))return [{model,type,name,id:normalisePath(name)}];
+  const children=[];
+  model.traverse(child=>{if(child.geometry&&(child.isMesh||child.isPoints||child.isLine))children.push(child);});
+  if(!children.some(child=>classifyObj(child.name)!=='Other'))return [{model,type,name,id:normalisePath(name)}];
+  model.updateMatrixWorld(true);
+  const groups=new Map();
+  for(const child of children){
+    const kind=classifyObj(child.name);
+    if(!groups.has(kind))groups.set(kind,new THREE.Group());
+    groups.get(kind).attach(child);
+  }
+  return [...groups].map(([kind,group])=>({
+    model:group,type:kind,name:name+' · '+kind,id:normalisePath(name)+'#'+kind.toLowerCase()
+  }));
 }
 
 function disposeObject(object){
@@ -30,7 +49,7 @@ export class ObjMapLayer {
     this.camera=new THREE.Camera();
     this.group=new THREE.Group();this.scene.add(this.group);
     this.loaded=[];this.reference=null;this.anchorEN=null;this.anchorLngLat=null;
-    this.grounded=true;
+    this.grounded=true;this.projection=null;
     this.visibility={Points:true,Viewsheds:true,Frustums:true,Other:true};
     this.entryVisibility=new Map();this.visibleCount=0;this.loadSerial=0;
     this.renderer=null;this.alignment=null;this.alignmentOrigin=null;
@@ -38,7 +57,7 @@ export class ObjMapLayer {
     this.scaleMatrix=new THREE.Matrix4();
     this.rotateMatrix=new THREE.Matrix4().makeRotationX(Math.PI/2);
     this.alignmentUniforms={
-      originEN:{value:new THREE.Vector2()},
+      originMap:{value:new THREE.Vector2()},
       cameraSector:{value:new THREE.Vector3(0,1,1)},
       sourceCount:{value:0},
       sourceSectors:{value:Array.from({length:MAX_INTERVALS},()=>new THREE.Vector3())}
@@ -65,8 +84,7 @@ export class ObjMapLayer {
     };
   }
   _cacheAnchor(){
-    const coord=window.maplibregl.MercatorCoordinate.fromLngLat(this.anchorLngLat,0);
-    const scale=coord.meterInMercatorCoordinateUnits();
+    const {anchor:coord,scale}=this.projection;
     this.anchorMatrix.makeTranslation(coord.x,coord.y,coord.z);
     this.scaleMatrix.makeScale(scale,scale,scale);
     this.anchorMatrix.multiply(this.scaleMatrix).multiply(this.rotateMatrix);
@@ -100,6 +118,26 @@ export class ObjMapLayer {
     this.grounded=!!enabled;
     this._applyGrounding();this.map.triggerRepaint();
   }
+  setAppearance(value){
+    this.appearance=value;
+    for(const entry of this.loaded)this._applyAppearance(entry);
+    this.map.triggerRepaint();
+  }
+  _applyAppearance(entry){
+    if(!this.appearance)return;
+    const highlights=new Set(entry.highlights);
+    entry.model.traverse(child=>{
+      if(!child.material||highlights.has(child))return;
+      const part=child.isLine?'line':'fill',value=this.appearance[part];
+      for(const material of [child.material].flat()){
+        material.color.set(value.color);
+        material.opacity=1-((child.isPoints||entry.type==='Points')?(value.pointTransparency??value.transparency):value.transparency)/100;
+        material.transparent=material.opacity<1;
+        material.depthWrite=material.opacity===1;
+        material.needsUpdate=true;
+      }
+    });
+  }
   _applyGrounding(){
     // Cache source bounds at import time. Never measure already-translated models
     // or depend on visibility when finding a location's shared ground baseline.
@@ -111,7 +149,7 @@ export class ObjMapLayer {
     }
     for(const entry of this.loaded){
       entry.groundOffset=this.grounded?-baselines.get(key(entry)):0;
-      // Rebased OBJ axes are E,H,N: Three.js Y is the original vertical Z.
+      // Local map axes are east,height,north: only Y changes during grounding.
       entry.model.position.y=entry.sourcePositionY+entry.groundOffset;
       entry.model.updateMatrixWorld(true);
     }
@@ -122,12 +160,12 @@ export class ObjMapLayer {
       try{
         const previous=this.alignmentOrigin;
         const projected=previous && previous.lng===alignment.origin[0] && previous.lat===alignment.origin[1]
-          ? previous.projected : window.proj4('EPSG:4326',CRS,alignment.origin);
+          ? previous.projected : this.projection.fromLngLat(alignment.origin);
         const [e,n]=projected;
         if(Number.isFinite(e)&&Number.isFinite(n)){
           this.alignmentOrigin={lng:alignment.origin[0],lat:alignment.origin[1],projected};
           const uniforms=this.alignmentUniforms;
-          uniforms.originEN.value.set(e-this.anchorEN[0],n-this.anchorEN[1]);
+          uniforms.originMap.value.set(e,n);
           this._sector(uniforms.cameraSector.value,alignment.heading,alignment.horizontalFov);
           const intervals=(alignment.intervals||[]).filter(s=>Number.isFinite(s.heading)&&Number.isFinite(s.horizontalFov)&&s.horizontalFov>0);
           // More intervals than the shader supports are merged into the unmasked
@@ -150,20 +188,20 @@ export class ObjMapLayer {
       side:THREE.DoubleSide,transparent:true,depthWrite:false,
       polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1,
       vertexShader:
-        'varying vec2 surfaceEN;\n'+
+        'varying vec2 surfaceMap;\n'+
         'void main(){\n'+
         '  vec4 world=modelMatrix*vec4(position,1.0);\n'+
-        '  surfaceEN=world.xz;\n'+
+        '  surfaceMap=world.xz;\n'+
         '  gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);\n'+
         '}',
       fragmentShader:
-        'uniform vec2 originEN;\n'+
+        'uniform vec2 originMap;\n'+
         'uniform vec3 cameraSector;\n'+
         'uniform int sourceCount;\n'+
         'uniform vec3 sourceSectors['+MAX_INTERVALS+'];\n'+
-        'varying vec2 surfaceEN;\n'+
+        'varying vec2 surfaceMap;\n'+
         'void main(){\n'+
-        '  vec2 delta=surfaceEN-originEN;\n'+
+        '  vec2 delta=surfaceMap-originMap;\n'+
         '  float distanceM=length(delta);\n'+
         '  if(distanceM<0.01)discard;\n'+
         '  vec2 direction=delta/distanceM;\n'+
@@ -184,7 +222,7 @@ export class ObjMapLayer {
     this.loadSerial++;
     for(const entry of this.loaded)disposeObject(entry.model);
     this.group.clear();this.loaded=[];this.visibleCount=0;
-    this.anchorEN=null;this.anchorLngLat=null;this.alignment=null;this.alignmentOrigin=null;
+    this.anchorEN=null;this.anchorLngLat=null;this.projection=null;this.alignment=null;this.alignmentOrigin=null;
     this.map.triggerRepaint();
   }
   async load(entries,reference,progress=()=>{}){
@@ -194,7 +232,7 @@ export class ObjMapLayer {
     let vertices=0;const fail=[];
     for(const [i,item] of entries.entries()){
       let model=null,material=null;
-      const oldMaterials=new Set();
+      const roots=[],pending=[],oldMaterials=new Set();
       try{
         progress('Parsing '+(i+1)+'/'+entries.length);
         if(item.bytes>110*1024*1024)throw new Error('Individual OBJ exceeds 110 MB preview limit.');
@@ -205,51 +243,64 @@ export class ObjMapLayer {
         const frame=getObjCoordinateFrame(first,this.reference);
         const [e,n]=projectedVertex(first,frame,this.reference);
         const anchor=this.anchorEN||[e,n];
-        const transformed=rebaseObjForMap(text,anchor,frame,this.reference);
-        model=loader.parse(transformed.text);
-        const type=classifyObj(item.name),transparent=type==='Frustums'||type==='Viewsheds';
-        const opacity=type==='Frustums'?.24:type==='Viewsheds'?.24:1;
-        const renderables=[],meshes=[],highlights=[];
-        model.traverse(child=>{
-          if(!child.geometry || !(child.isMesh||child.isPoints||child.isLine))return;
-          const geometry=child.geometry;
-          geometry.computeBoundingBox();geometry.computeBoundingSphere();
-          if(!Number.isFinite(geometry.boundingSphere?.radius))throw new Error('OBJ contains invalid geometry.');
-          renderables.push(child);
-        });
-        if(!renderables.length)throw new Error('OBJ has no renderable geometry.');
-        const sourceMinHeight=new THREE.Box3().setFromObject(model).min.y;
-        if(!Number.isFinite(sourceMinHeight))throw new Error('OBJ contains invalid height bounds.');
-        // Category colours do not need per-fragment lighting or imported MTLs.
-        material=new THREE.MeshBasicMaterial({color:COLOURS[type],side:THREE.DoubleSide,transparent,opacity,depthWrite:!transparent});
-        for(const child of renderables){
-          for(const old of [child.material].flat())if(old)oldMaterials.add(old);
-          if(child.isMesh){child.material=material;meshes.push(child);}
-          else if(child.isPoints)child.material=new THREE.PointsMaterial({color:COLOURS[type],size:3,sizeAttenuation:false,transparent,opacity,depthWrite:!transparent});
-          else if(child.isLine)child.material=new THREE.LineBasicMaterial({color:COLOURS[type],transparent,opacity,depthWrite:!transparent});
-          child.frustumCulled=true;
-        }
-        for(const old of oldMaterials)old.dispose();
-        oldMaterials.clear();
-        if(!meshes.length)material.dispose();
-        if(type==='Viewsheds'&&meshes.length){
-          const overlayMaterial=this._highlightMaterial();
-          for(const mesh of meshes){
-            const highlight=new THREE.Mesh(mesh.geometry,overlayMaterial);
-            highlight.visible=false;highlight.renderOrder=2;
-            mesh.add(highlight);highlights.push(highlight);
+        const projection=this.projection||createObjProjection(anchor);
+        const transformed=rebaseObjForMap(text,frame,this.reference,projection.project);
+        model=loader.parse(transformed.text);roots.push(model);
+        const parts=modelParts(model,item.name);
+        for(const part of parts)if(part.model!==model)roots.push(part.model);
+        for(const part of parts){
+          model=part.model;
+          const type=part.type,transparent=type==='Frustums'||type==='Viewsheds';
+          const opacity=transparent ? .24 : 1;
+          const renderables=[],meshes=[],highlights=[];
+          model.traverse(child=>{
+            if(!child.geometry || !(child.isMesh||child.isPoints||child.isLine))return;
+            const geometry=child.geometry;
+            if(child.isMesh)geometry.computeVertexNormals();
+            geometry.computeBoundingBox();geometry.computeBoundingSphere();
+            if(!Number.isFinite(geometry.boundingSphere?.radius))throw new Error('OBJ contains invalid geometry.');
+            renderables.push(child);
+          });
+          if(!renderables.length)throw new Error('OBJ has no renderable geometry.');
+          const sourceMinHeight=new THREE.Box3().setFromObject(model).min.y;
+          if(!Number.isFinite(sourceMinHeight))throw new Error('OBJ contains invalid height bounds.');
+          material=new THREE.MeshBasicMaterial({color:COLOURS[type],side:THREE.DoubleSide,transparent,opacity,depthWrite:!transparent});
+          for(const child of renderables){
+            for(const old of [child.material].flat())if(old)oldMaterials.add(old);
+            if(child.isMesh){child.material=material;meshes.push(child);}
+            else if(child.isPoints)child.material=new THREE.PointsMaterial({color:COLOURS[type],size:3,sizeAttenuation:false,transparent,opacity,depthWrite:!transparent});
+            else if(child.isLine)child.material=new THREE.LineBasicMaterial({color:COLOURS[type],transparent,opacity,depthWrite:!transparent});
+            child.frustumCulled=true;
           }
+          for(const old of oldMaterials)old.dispose();
+          oldMaterials.clear();
+          if(!meshes.length)material.dispose();
+          for(const mesh of meshes){
+            const edges=new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry,25),new THREE.LineBasicMaterial({color:0x203e34,depthWrite:false}));
+            edges.renderOrder=1;mesh.add(edges);
+          }
+          if(type==='Viewsheds'&&meshes.length){
+            const overlayMaterial=this._highlightMaterial();
+            for(const mesh of meshes){
+              const highlight=new THREE.Mesh(mesh.geometry,overlayMaterial);
+              highlight.visible=false;highlight.renderOrder=2;
+              mesh.add(highlight);highlights.push(highlight);
+            }
+          }
+          const entry={id:part.id,name:part.name,sourceName:item.name,type,viewId:locationId(item.name),model,material,highlights,
+            vertices:renderables.reduce((count,child)=>count+(child.geometry.attributes?.position?.count||0),0)||transformed.vertexCount,
+            sourceMinHeight,sourcePositionY:model.position.y,groundOffset:0};
+          this._applyAppearance(entry);pending.push(entry);
         }
-        if(!this.anchorEN){this.anchorEN=anchor;this.anchorLngLat=toLngLat(...anchor);this._cacheAnchor();}
-        const id=normalisePath(item.name);
-        model.name=item.name;
-        this.loaded.push({id,name:item.name,type,viewId:locationId(item.name),model,material,highlights,vertices:transformed.vertexCount,sourceMinHeight,sourcePositionY:model.position.y,groundOffset:0});
-        this.group.add(model);vertices+=transformed.vertexCount;
+        if(!this.anchorEN){
+          this.anchorEN=anchor;this.projection=projection;this.anchorLngLat=projection.anchorLngLat;this._cacheAnchor();
+        }
+        for(const entry of pending){this.loaded.push(entry);this.group.add(entry.model);}
+        vertices+=transformed.vertexCount;
       }catch(error){
         for(const old of oldMaterials)old.dispose();
-        if(model)disposeObject(model);
-        // The category material may not have been attached if construction failed.
-        else material?.dispose();
+        for(const root of roots)disposeObject(root);
+        if(!roots.length)material?.dispose();
         fail.push(item.name+': '+error.message);
       }
       // Yield between files so location controls and cancellation remain usable.

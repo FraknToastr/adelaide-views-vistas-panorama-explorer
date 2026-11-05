@@ -8,6 +8,34 @@ export function toLngLat(easting,northing) {
   if (!Number.isFinite(easting) || !Number.isFinite(northing)) throw new Error('Invalid projected coordinates.');
   return window.proj4(CRS,'EPSG:4326',[easting,northing]);
 }
+/** A true map-north local frame, in Mercator units scaled to anchor metres.
+ * Reproject once before uploading geometry; MGA grid offsets are not map offsets.
+ * Vertical values remain source metres so grounding preserves relative heights.
+ */
+export function createObjProjection(anchorEN) {
+  const anchorLngLat=toLngLat(...anchorEN);
+  const Mercator=window.maplibregl.MercatorCoordinate;
+  const anchor=Mercator.fromLngLat(anchorLngLat,0);
+  const scale=anchor.meterInMercatorCoordinateUnits();
+  if(![anchor.x,anchor.y,scale].every(Number.isFinite)||scale<=0)throw new Error('Invalid OBJ map anchor.');
+  function fromLngLat(lngLat){
+    const point=Mercator.fromLngLat(lngLat,0);
+    const x=(point.x-anchor.x)/scale,z=(anchor.y-point.y)/scale;
+    if(![x,z].every(Number.isFinite))throw new Error('Invalid OBJ map coordinates.');
+    return [x,z];
+  }
+  return {
+    anchorLngLat,anchor,scale,fromLngLat,
+    project(e,n,h){
+      const [x,z]=fromLngLat(toLngLat(e,n));
+      return [x,h,z];
+    },
+    toLngLat(x,z){
+      const point=new Mercator(anchor.x+x*scale,anchor.y-z*scale,0).toLngLat();
+      return [point.lng,point.lat];
+    }
+  };
+}
 export function plausibleLonLat(coords) {
   return coords?.[0] >= 110 && coords?.[0] <= 160 && coords?.[1] >= -47 && coords?.[1] <= -5;
 }

@@ -14,7 +14,7 @@ The application uses pinned, externally hosted MapLibre, Three.js, shpjs, JSZip 
 
 1. Open **Import data** and choose the spatial ZIP under **Viewpoints & view cones**. A ZIP containing both shapefiles loads them together. Separate shapefile ZIPs and matching loose SHP/DBF/PRJ files also work.
 2. Under **360° photographs**, choose the parent photo folder. All nested subfolders are indexed automatically. Relative paths such as `20260710/IMG_20260709_125554_00_013` match the source `360IMG` attribute.
-3. Optionally choose an OBJ ZIP, OBJ files or a directory under **3D OBJ layers**. The **Load Park 10 OBJ sample** button loads the bundled nine-file example.
+3. Optionally choose an OBJ ZIP, OBJ files or a directory under **3D OBJ layers**. Model and photograph data are supplied locally and are not bundled in the public repository.
 4. Import **Reference JSON** when OBJ coordinates are scene-local rather than projected Easting/Northing/Height.
 5. Select a location in the sidebar or click its map point.
 
@@ -29,7 +29,7 @@ Each location contains **Point**, **Viewshed** and **Frustum** controls. Expand 
 - **Select none** disables every loaded layer, including entries outside the search results; it becomes **Select all** until every layer is enabled again.
 - Expanding or selecting a location does not change visibility. **Zoom to selection** frames the active location and its associated point, cones and OBJ geometry without changing layer visibility.
 - Visibility survives basemap changes and photo navigation. New OBJ entries inherit hidden location/category states.
-- OBJ names such as `Park_10__TorRiv.M__Viewsheds.obj` associate with viewpoint `TorRiv.M`. Files without a recognizable location token remain available under **Other layers**.
+- Separate-category OBJ names such as `Park_10__TorRiv.M__Viewsheds.obj` associate with viewpoint `TorRiv.M`. Combined 1.3.1 exports such as `Park_10__TorRiv.M.obj` are separated internally by their generated Point/Viewshed/Frustum object names. Files without a recognizable location token remain available under **Other layers**.
 - Viewpoints without photos remain selectable.
 - Shapefile cone polygons are the 2D viewshed representation. Optional OBJ viewsheds and frustums are separate 3D layers.
 
@@ -57,7 +57,17 @@ The supplied spatial ZIP contains 139 non-null point records, 139 non-null polyg
 
 The app uses shapefile geometry and PRJ information, rather than guessing coordinate units from field names. The supplied GDA2020 / MGA Zone 54 data is compatible with EPSG:7854. Its fields named LONG and LAT contain projected metre coordinates.
 
-OBJ Easting/Northing/Height coordinates are rebased before conversion to GPU buffers. Scene-local coordinates require a matching scene origin. Materials are replaced with category colors; source OBJ textures are not loaded. The existing preview limits remain 110 MB of text per OBJ and 500 MB combined OBJ inputs.
+OBJ Easting/Northing coordinates are individually reprojected from MGA54 into MapLibre Mercator, then rebased before conversion to GPU buffers. This accounts for grid-north rotation and projection scale differences; raw MGA offsets are not used as map offsets. Height remains in source metres. Scene-local coordinates require a matching scene origin. Import computes and caches geometry, normals, edges and bounds; navigation and appearance changes do not repeat projection work. Source OBJ textures are not loaded. Preview limits remain 110 MB of text per OBJ and 500 MB combined OBJ inputs.
+
+The local TorRiv.M sample had approximately 6.1 m of horizontal display error with the former anchor-only conversion. Corrected import aligns its viewshed within approximately 0.3 m of the shapefile, reflecting existing OBJ float32 rounding. The importer cannot recover source precision already lost before export.
+
+## Spatial appearance
+
+The framed **Spatial appearance** controls sit above the framed **Layers** search and visibility controls. Each of **3D objects** and **Shapefiles** has a Line/Fill pill that selects which colour and transparency to edit. Both lines and fills remain displayed. Transparency runs from 0% opaque to 100% invisible; each choice retains its own values. Settings apply globally to existing and future imports, survive basemap changes and browser reloads, and can be restored using **Reset appearance**. Points initially remain opaque until fill transparency is edited. Camera direction and alignment highlights retain their distinct styling.
+
+## Blender add-ons
+
+The original 1.3.1 and 1.3.2 add-on ZIPs are in `Blender/`. Version 1.3.1 is the version reported as used for the supplied exports; 1.3.2 has not been tested interactively. See [the audit report](Blender/AUDIT.md) for version differences, coordinate precision findings, test results and follow-up recommendations. Neither ZIP bundles photos or OBJ data.
 
 ## OBJ grounding
 

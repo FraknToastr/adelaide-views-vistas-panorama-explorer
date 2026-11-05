@@ -75,6 +75,8 @@ try {
   assert.equal(await page.locator('#zoomToSelection').isDisabled(),true);
   assert.equal(await page.locator('#groundObjLayers').isChecked(),true);
   assert.equal(await page.locator('#groundObjLayers').isDisabled(),true);
+  assert.equal(await page.getByRole('button',{name:'Import data',exact:true}).count(),1);
+  assert.deepEqual(await page.locator('.appearance-frame > legend').allTextContents(),['Spatial appearance','Layers']);
   await page.locator('#layersBtn').click();assert.equal(await page.locator('#layersPanel').isVisible(),false);
   await page.locator('#layersBtn').click();assert.equal(await page.locator('#layersPanel').isVisible(),true);
   if(spatial&&photoFolder) {
@@ -95,14 +97,35 @@ try {
     // A hidden parent must stay hidden when its OBJ files arrive later.
     await page.getByRole('button',{name:'Done',exact:true}).click();
     await page.locator('.location[data-location="TorRiv.M"] .location-row input').uncheck();
-await page.locator('#importBtn').click();
-await page.locator('#referenceInput').setInputFiles(path.resolve(root,'samples/export_reference.json'));
-await page.waitForFunction(()=>document.getElementById('referenceFeedback').textContent==='Loaded');
-await page.locator('#objInput').setInputFiles(path.resolve(root,'samples/Park_10.zip'));
+    await page.locator('#importBtn').click();
+    await page.locator('#referenceInput').setInputFiles(path.resolve(root,'samples/export_reference.json'));
+    await page.waitForFunction(()=>document.getElementById('referenceFeedback').textContent==='Loaded');
+    await page.locator('#objInput').setInputFiles(path.resolve(root,'samples/Park_10.zip'));
     await page.waitForFunction(()=>document.getElementById('objFeedback').textContent==='Loaded');
     assert.deepEqual(await page.evaluate(()=>{const s=window.vistas.state;return [s.obj.loaded.length,s.obj.loaded.filter(e=>e.viewId==='TorRiv.M'&&e.model.visible).length,!!s.map.getLayer(s.obj.layer.id)];}),[9,0,true]);
     await page.getByRole('button',{name:'Done',exact:true}).click();
     assert.equal(await page.locator('#groundObjLayers').isDisabled(),false);
+    const alignmentErrors=await page.evaluate(async()=>{
+      const THREE=await import('three'),s=window.vistas.state,errors=[];
+      const flatten=coords=>typeof coords[0]==='number'?[coords]:coords.flatMap(flatten);
+      for(const entry of s.obj.loaded.filter(e=>e.type==='Viewsheds')){
+        const target=s.locations.get(entry.viewId).cones.flatMap(f=>flatten(f.geometry.coordinates)).map(ll=>s.obj.projection.fromLngLat(ll));
+        let maxError=0;
+        entry.model.updateMatrixWorld(true);
+        entry.model.traverse(child=>{
+          if(!child.isMesh||entry.highlights.includes(child))return;
+          const positions=child.geometry.attributes.position;
+          for(let i=0;i<positions.count;i++){
+            const p=new THREE.Vector3().fromBufferAttribute(positions,i).applyMatrix4(child.matrixWorld);
+            maxError=Math.max(maxError,Math.min(...target.map(([x,z])=>Math.hypot(p.x-x,p.z-z))));
+          }
+        });
+        errors.push({viewId:entry.viewId,maxError});
+      }
+      return errors;
+    });
+    assert.equal(alignmentErrors.length,3);
+    for(const {viewId,maxError} of alignmentErrors)assert.ok(maxError<.3,viewId+' OBJ/SHP mismatch: '+maxError+' m');
     const grounded=await page.evaluate(async()=>{
       const THREE=await import('three'),s=window.vistas.state;
       const groups=new Map();

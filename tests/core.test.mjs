@@ -32,7 +32,7 @@ test('raw MGA OBJ becomes compact local vertices retaining height and orientatio
   const frame=getObjCoordinateFrame(first,null);
   assert.equal(frame,'RAW_ENH');
   assert.deepEqual(projectedVertex(first,frame,null),first);
-  const converted=rebaseObjForMap(raw,first.slice(0,2),frame,null);
+  const converted=rebaseObjForMap(raw,frame,null,(e,n,h)=>[e-first[0],h,n-first[1]]);
   assert.equal(converted.vertexCount,2);
   assert.match(converted.text,/v 0\.00000 26\.39394 0\.00000/);
   assert.match(converted.text,/v -169\.25000 128\.00758 -59\.50000/);

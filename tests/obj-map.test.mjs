@@ -10,7 +10,8 @@ async function fixture(){
   const counters={renders:0,rendererDisposals:0,repaints:0,materials:[],geometries:[],importedMaterials:[]};
   class Group {
     constructor(){this.children=[];this.visible=true;this.position={x:0,y:0,z:0};}
-    add(object){this.children.push(object);}
+    add(object){if(object.parent)object.parent.children=object.parent.children.filter(child=>child!==object);this.children.push(object);object.parent=this;}
+    attach(object){this.add(object);}
     clear(){this.children=[];}
     updateMatrixWorld(){}
     traverse(callback){callback(this);for(const child of this.children)child.traverse(callback);}
@@ -39,12 +40,13 @@ async function fixture(){
     fromArray(){return this;}
   }
   class Material {
-    constructor(options={}){Object.assign(this,options);this.disposals=0;counters.materials.push(this);}
+    constructor(options={}){Object.assign(this,options);this.color={value:options.color,set(value){this.value=value;}};this.disposals=0;counters.materials.push(this);}
     dispose(){this.disposals++;}
   }
   class Geometry {
     constructor(valid=true,vertices=[]){this.valid=valid;this.vertices=vertices;this.disposals=0;counters.geometries.push(this);}
     computeBoundingBox(){}
+    computeVertexNormals(){}
     computeBoundingSphere(){this.boundingSphere={radius:this.valid?1:NaN};}
     dispose(){this.disposals++;}
   }
@@ -52,18 +54,28 @@ async function fixture(){
     constructor(geometry,material){super();this.geometry=geometry;this.material=material;this.isMesh=true;}
   }
   class Camera {constructor(){this.projectionMatrix=new Matrix();}}
+  class EdgesGeometry extends Geometry {constructor(){super();}}
+  class LineSegments extends Mesh {constructor(...args){super(...args);this.isMesh=false;this.isLine=true;}}
   class Renderer {
     resetState(){}
     render(){counters.renders++;}
     dispose(){counters.rendererDisposals++;}
   }
-  const THREE={Scene:Group,Group,Camera,Box3:Box,Matrix4:Matrix,Vector2:Vector,Vector3:Vector,MeshBasicMaterial:Material,ShaderMaterial:Material,PointsMaterial:Material,LineBasicMaterial:Material,Mesh,WebGLRenderer:Renderer,DoubleSide:2};
+  const THREE={Scene:Group,Group,Camera,Box3:Box,Matrix4:Matrix,Vector2:Vector,Vector3:Vector,MeshBasicMaterial:Material,ShaderMaterial:Material,PointsMaterial:Material,LineBasicMaterial:Material,Mesh,EdgesGeometry,LineSegments,WebGLRenderer:Renderer,DoubleSide:2};
   class OBJLoader {
     parse(text){
-      const model=new Group(),original=new Material();
-      counters.importedMaterials.push(original);
-      const vertices=text.split('\n').filter(line=>/^v\s/.test(line)).map(line=>line.trim().split(/\s+/).slice(1,4).map(Number));
-      model.add(new Mesh(new Geometry(!text.includes('# invalid bounds'),vertices),original));
+      const model=new Group(),vertices=[],parts=[];
+      let part={name:'',vertices:[]};parts.push(part);
+      for(const line of text.split('\n')){
+        const fields=line.trim().split(/\s+/);
+        if(fields[0]==='v')vertices.push(fields.slice(1,4).map(Number));
+        if(fields[0]==='o'||fields[0]==='g'){part={name:fields.slice(1).join(' '),vertices:[]};parts.push(part);}
+        if(fields[0]==='f')for(const token of fields.slice(1)){const index=Number(token.split('/')[0]);part.vertices.push(vertices[index<0?vertices.length+index:index-1]);}
+      }
+      for(const p of parts.filter(p=>p.vertices.length)){
+        const original=new Material();counters.importedMaterials.push(original);
+        const child=new Mesh(new Geometry(!text.includes('# invalid bounds'),p.vertices),original);child.name=p.name;model.add(child);
+      }
       return model;
     }
   }
@@ -73,7 +85,12 @@ async function fixture(){
   globalThis[key]={THREE,OBJLoader};
   globalThis.window={
     proj4:(from,to,coordinates)=>coordinates,
-    maplibregl:{MercatorCoordinate:{fromLngLat:()=>({x:0,y:0,z:0,meterInMercatorCoordinateUnits:()=>1})}}
+    maplibregl:{MercatorCoordinate:class {
+      constructor(x,y,z=0){this.x=x;this.y=y;this.z=z;}
+      static fromLngLat([lng,lat]){return new this(lng,-lat);}
+      meterInMercatorCoordinateUnits(){return 1;}
+      toLngLat(){return {lng:this.x,lat:-this.y};}
+    }}
   };
   const text=source
     .replace("import * as THREE from 'three';",'const {THREE}=globalThis['+JSON.stringify(key)+'];')
@@ -98,6 +115,45 @@ async function fixture(){
 const text='v 281387 6134191 26\nv 281388 6134192 26\nv 281389 6134192 27\nf 1 2 3';
 const entry=(type,id='TorRiv.M')=>({name:'Park_10/'+type+'/Park_10__'+id+'__'+type+'.obj',readText:async()=>text});
 const allEntries=()=>['Points','Viewsheds','Frustums'].map(type=>entry(type));
+
+test('v1.3.1 combined exports split into location-associated categories with shared grounding',async()=>{
+  const {layer,counters}=await fixture();
+  const combined='v 281387 6134191 24.8\nv 281388 6134191 26.3\nv 281387 6134192 24.8\n'+
+    'v 281390 6134200 24.85\nv 281400 6134210 24.85\nv 281387 6134191 24.85\n'+
+    'v 281387 6134191 26.4\nv 281410 6134200 70\nv 281400 6134210 90\n'+
+    'o Point_TorRiv.M\nf 1 2 3\no Viewshed_TorRiv.M_1_1\nf 4 5 6\no Frustum_TorRiv.M_1\nf 7 8 9';
+  const summary=await layer.load([{name:'Park_10/Park_10__TorRiv.M.obj',readText:async()=>combined}],null);
+  assert.equal(summary.loaded,3);assert.equal(summary.vertices,9);
+  assert.deepEqual(layer.loaded.map(e=>[e.viewId,e.type]),[['TorRiv.M','Points'],['TorRiv.M','Viewsheds'],['TorRiv.M','Frustums']]);
+  assert.equal(new Set(layer.loaded.map(e=>e.id)).size,3);
+  for(const e of layer.loaded)near(e.groundOffset,-24.8);
+  const viewshed=layer.loaded.find(e=>e.type==='Viewsheds');
+  assert.equal(viewshed.highlights.length,1);
+  layer.setEntryVisible(viewshed.id,false);
+  assert.equal(viewshed.model.visible,false);assert.equal(layer.visibleCount,2);
+  layer.setAlignment({active:true,viewId:'TorRiv.M',origin:[281387,6134191],heading:0,horizontalFov:90});
+  assert.deepEqual(layer.alignmentUniforms.originMap.value.values,[0,0]);
+  layer.dispose();assert.ok(counters.geometries.every(g=>g.disposals===1));
+});
+
+test('appearance and grounding reuse geometry and leave the alignment highlight material intact',async()=>{
+  const {layer,counters}=await fixture();
+  const appearance={line:{color:'#ffffff',transparency:100},fill:{color:'#ff0000',transparency:50,pointTransparency:0}};
+  layer.setAppearance(appearance);await layer.load(allEntries(),null);
+  const highlight=layer.loaded[1].highlights[0].material;
+  const count=counters.geometries.length;
+  for(const e of layer.loaded){
+    const mesh=e.model.children[0],edge=mesh.children.find(c=>c.isLine);
+    assert.equal(mesh.material.color.value,'#ff0000');
+    assert.equal(mesh.material.opacity,e.type==='Points'?1:.5);
+    assert.equal(edge.material.opacity,0);assert.equal(edge.material.depthWrite,false);
+  }
+  for(let i=0;i<5;i++){layer.setAppearance(appearance);layer.setGrounded(i%2===0);}
+  assert.equal(counters.geometries.length,count);
+  assert.equal(layer.loaded[1].highlights[0].material,highlight);
+  assert.equal(highlight.opacity,undefined,'shader highlight opacity is independent');
+  layer.dispose();
+});
 
 test('OBJ points, viewsheds and frustums expose stable file identities and exact source location IDs',async()=>{
   const {layer,counters}=await fixture();

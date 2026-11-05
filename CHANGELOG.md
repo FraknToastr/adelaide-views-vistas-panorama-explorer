@@ -1,5 +1,10 @@
 ## Unreleased
 
+- Correct OBJ/shapefile alignment by reprojecting each vertex into a cached local Mercator frame, including camera-highlight origins and Zoom to Selection.
+- Support combined Blender 1.3.1 location exports alongside separate-category 1.3.2 exports; preserve shared grounding and independent category visibility.
+- Add global Line/Fill colour and transparency controls, remembered appearance settings, reset, and cached OBJ edge overlays.
+- Frame Layers search/visibility controls below Spatial appearance; strengthen legends, replace the leaf with a tree, and keep Import data in the main header only.
+- Include both original Blender add-on ZIPs and an alignment/precision audit; keep photos and source OBJ/model archives excluded.
 - Ground OBJ models at zero per location by default, preserving shared point/viewshed/frustum geometry and camera height; add a sidebar toggle to restore original elevations.
 
 - Added a location-based layer sidebar with individual 2D and 3D OBJ controls, mixed states and select all/none.

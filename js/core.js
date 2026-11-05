@@ -68,8 +68,8 @@ export function projectedVertex(firstVertex, frame, reference) {
   }
   throw new Error('Unsupported OBJ coordinate frame.');
 }
-export function rebaseObjForMap(text, anchorEN, frame, reference) {
-  const [ae, an] = anchorEN;
+export function rebaseObjForMap(text, frame, reference, project) {
+  if(typeof project!=='function')throw new Error('OBJ map projection is required.');
   let count = 0;
   const output = String(text).split(/\r?\n/).map(line => {
     if (/^v\s/.test(line)) {
@@ -78,9 +78,12 @@ export function rebaseObjForMap(text, anchorEN, frame, reference) {
       const v = parts.slice(1,4).map(Number);
       if (!v.every(Number.isFinite)) return line;
       const [e,n,h] = projectedVertex(v,frame,reference);
-      // XYZ OBJ originally E,N,H. Three.js group is E,H,N, then rotated +90° about X to E,-N,H in Mercator.
+      // XYZ OBJ originally E,N,H. Project E/N into the map's local east/north
+      // plane while retaining H as Three.js Y. Never treat MGA offsets as Mercator.
+      const xyz=project(e,n,h);
+      if(!xyz.every(Number.isFinite))throw new Error('Invalid projected OBJ vertex.');
       count++;
-      return `v ${(e-ae).toFixed(5)} ${h.toFixed(5)} ${(n-an).toFixed(5)}`;
+      return 'v '+xyz.map(value=>value.toFixed(5)).join(' ');
     }
     if (/^vn\s/.test(line)) {
       const a = line.trim().split(/\s+/);

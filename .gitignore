@@ -15,11 +15,12 @@
 *.[iI][nN][sS][vV]
 *.[mM][pP]4
 *.[mM][oO][vV]
-# User import archives and 3D geometry are local and must never be uploaded.
-/FW__*.zip
-samples/*.zip
-*.obj
-*.mtl
+# Import archives and 3D geometry stay local. Only the audited add-on ZIPs ship.
+*.[zZ][iI][pP]
+!/Blender/Adelaide_GeoLOD_Views_Vistas_Blender5_v1.3.1.zip
+!/Blender/Adelaide_GeoLOD_Views_Vistas_Blender5_v1.3.2.zip
+*.[oO][bB][jJ]
+*.[mM][tT][lL]
 *:Zone.Identifier
 # Credentials, agent state, dependencies and generated artifacts.
 .env
