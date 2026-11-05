@@ -30,6 +30,7 @@ export class ObjMapLayer {
     this.camera=new THREE.Camera();
     this.group=new THREE.Group();this.scene.add(this.group);
     this.loaded=[];this.reference=null;this.anchorEN=null;this.anchorLngLat=null;
+    this.grounded=true;
     this.visibility={Points:true,Viewsheds:true,Frustums:true,Other:true};
     this.entryVisibility=new Map();this.visibleCount=0;this.loadSerial=0;
     this.renderer=null;this.alignment=null;this.alignmentOrigin=null;
@@ -94,6 +95,26 @@ export class ObjMapLayer {
   applyEntryVisibility(values){
     for(const [id,enabled] of values instanceof Map?values:Object.entries(values))this.entryVisibility.set(id,!!enabled);
     this._updateVisibility();this.map.triggerRepaint();
+  }
+  setGrounded(enabled){
+    this.grounded=!!enabled;
+    this._applyGrounding();this.map.triggerRepaint();
+  }
+  _applyGrounding(){
+    // Cache source bounds at import time. Never measure already-translated models
+    // or depend on visibility when finding a location's shared ground baseline.
+    const baselines=new Map();
+    const key=entry=>entry.viewId?'location:'+entry.viewId:'file:'+entry.id;
+    for(const entry of this.loaded){
+      const id=key(entry);
+      baselines.set(id,Math.min(baselines.get(id)??Infinity,entry.sourceMinHeight));
+    }
+    for(const entry of this.loaded){
+      entry.groundOffset=this.grounded?-baselines.get(key(entry)):0;
+      // Rebased OBJ axes are E,H,N: Three.js Y is the original vertical Z.
+      entry.model.position.y=entry.sourcePositionY+entry.groundOffset;
+      entry.model.updateMatrixWorld(true);
+    }
   }
   setAlignment(alignment){
     this.alignment=null;
@@ -197,6 +218,8 @@ export class ObjMapLayer {
           renderables.push(child);
         });
         if(!renderables.length)throw new Error('OBJ has no renderable geometry.');
+        const sourceMinHeight=new THREE.Box3().setFromObject(model).min.y;
+        if(!Number.isFinite(sourceMinHeight))throw new Error('OBJ contains invalid height bounds.');
         // Category colours do not need per-fragment lighting or imported MTLs.
         material=new THREE.MeshBasicMaterial({color:COLOURS[type],side:THREE.DoubleSide,transparent,opacity,depthWrite:!transparent});
         for(const child of renderables){
@@ -220,7 +243,7 @@ export class ObjMapLayer {
         if(!this.anchorEN){this.anchorEN=anchor;this.anchorLngLat=toLngLat(...anchor);this._cacheAnchor();}
         const id=normalisePath(item.name);
         model.name=item.name;
-        this.loaded.push({id,name:item.name,type,viewId:locationId(item.name),model,material,highlights,vertices:transformed.vertexCount});
+        this.loaded.push({id,name:item.name,type,viewId:locationId(item.name),model,material,highlights,vertices:transformed.vertexCount,sourceMinHeight,sourcePositionY:model.position.y,groundOffset:0});
         this.group.add(model);vertices+=transformed.vertexCount;
       }catch(error){
         for(const old of oldMaterials)old.dispose();
@@ -234,6 +257,7 @@ export class ObjMapLayer {
       if(serial!==this.loadSerial)return {loaded:0,vertices:0,failed:[],cancelled:true};
     }
     if(!this.loaded.length)throw new Error('No OBJ geometry loaded. '+fail.slice(0,2).join('; '));
+    this._applyGrounding();
     this._updateVisibility();this.attach();this.map.triggerRepaint();
     if(fail.length)this.notify(fail.length+' OBJ file(s) skipped. '+fail[0],true);
     return {loaded:this.loaded.length,vertices,failed:fail};

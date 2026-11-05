@@ -73,6 +73,8 @@ try {
   await page.waitForFunction(()=>{const s=window.vistas.state;return !!s.map?.getLayer('vistas-points');});
   await page.screenshot({path:path.join(artifacts,'empty-desktop.png')});
   assert.equal(await page.locator('#zoomToSelection').isDisabled(),true);
+  assert.equal(await page.locator('#groundObjLayers').isChecked(),true);
+  assert.equal(await page.locator('#groundObjLayers').isDisabled(),true);
   await page.locator('#layersBtn').click();assert.equal(await page.locator('#layersPanel').isVisible(),false);
   await page.locator('#layersBtn').click();assert.equal(await page.locator('#layersPanel').isVisible(),true);
   if(spatial&&photoFolder) {
@@ -93,10 +95,33 @@ try {
     // A hidden parent must stay hidden when its OBJ files arrive later.
     await page.getByRole('button',{name:'Done',exact:true}).click();
     await page.locator('.location[data-location="TorRiv.M"] .location-row input').uncheck();
-    await page.locator('#importBtn').click();await page.locator('#loadObjSample').click();
+await page.locator('#importBtn').click();
+await page.locator('#referenceInput').setInputFiles(path.resolve(root,'samples/export_reference.json'));
+await page.waitForFunction(()=>document.getElementById('referenceFeedback').textContent==='Loaded');
+await page.locator('#objInput').setInputFiles(path.resolve(root,'samples/Park_10.zip'));
     await page.waitForFunction(()=>document.getElementById('objFeedback').textContent==='Loaded');
     assert.deepEqual(await page.evaluate(()=>{const s=window.vistas.state;return [s.obj.loaded.length,s.obj.loaded.filter(e=>e.viewId==='TorRiv.M'&&e.model.visible).length,!!s.map.getLayer(s.obj.layer.id)];}),[9,0,true]);
     await page.getByRole('button',{name:'Done',exact:true}).click();
+    assert.equal(await page.locator('#groundObjLayers').isDisabled(),false);
+    const grounded=await page.evaluate(async()=>{
+      const THREE=await import('three'),s=window.vistas.state;
+      const groups=new Map();
+      for(const entry of s.obj.loaded) {
+        if(!groups.has(entry.viewId))groups.set(entry.viewId,[]);
+        groups.get(entry.viewId).push({min:new THREE.Box3().setFromObject(entry.model).min.y,offset:entry.model.position.y});
+      }
+      const frustum=s.obj.loaded.find(e=>e.viewId==='TorRiv.M'&&e.type==='Frustums');
+      const cameraHeight=frustum.model.children.find(child=>child.isMesh).geometry.getAttribute('position').getY(0)+frustum.model.position.y;
+      return {groups:[...groups.values()],cameraHeight};
+    });
+    for(const group of grounded.groups) {
+      assert.ok(Math.abs(Math.min(...group.map(e=>e.min)))<1e-6);
+      assert.equal(new Set(group.map(e=>e.offset)).size,1);
+    }
+    assert.ok(Math.abs(grounded.cameraHeight-1.6)<1e-4);
+    await page.locator('#groundObjLayers').uncheck();
+    assert.equal(await page.evaluate(()=>window.vistas.state.obj.loaded.every(e=>e.model.position.y===e.sourcePositionY)),true);
+    await page.locator('#groundObjLayers').check();
     await page.locator('.location[data-location="TorRiv.M"] .location-row input').check();
     await page.locator('.location[data-location="TorRiv.M"] .location-name').click();
     await page.waitForFunction(()=>{const s=window.vistas.state;return s.viewer.active && s.viewer.renderer.info.memory.textures===1;});
@@ -162,9 +187,14 @@ try {
     assert.equal(await page.evaluate(()=>{const s=window.vistas.state;return s.obj.loaded.every(e=>e.model.visible);}),true);
     assert.deepEqual(await page.locator('#layerSelectionToggle').evaluate(el=>[el.textContent,el.getAttribute('aria-pressed')]),['Select none','true']);
     await objViewshed.uncheck();
+    await page.locator('#groundObjLayers').uncheck();
     await page.locator('[data-base="topo"]').click();
     await page.waitForFunction(()=>{const s=window.vistas.state;return !!s.map.getLayer(s.obj.layer.id) && !!s.map.getSource('vistas-overlap');});
     assert.equal(await page.evaluate(()=>{const s=window.vistas.state;return s.obj.loaded.find(e=>e.viewId==='TorRiv.M'&&e.type==='Viewsheds').model.visible;}),false);
+    assert.equal(await page.locator('#groundObjLayers').isChecked(),false);
+    assert.equal(await page.evaluate(()=>window.vistas.state.obj.loaded.every(e=>e.model.position.y===e.sourcePositionY)),true);
+    await page.locator('#groundObjLayers').check();
+    assert.equal(await page.evaluate(()=>window.vistas.state.obj.grounded),true);
     await objViewshed.check();
     await page.locator('#pitchBtn').click();
     await page.waitForFunction(()=>{const s=window.vistas.state;return s.map.getPitch()>50 && s.obj.renderer.info.render.calls>0;});

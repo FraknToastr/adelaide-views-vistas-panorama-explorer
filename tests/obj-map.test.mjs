@@ -9,10 +9,23 @@ let fixtureSerial=0;
 async function fixture(){
   const counters={renders:0,rendererDisposals:0,repaints:0,materials:[],geometries:[],importedMaterials:[]};
   class Group {
-    constructor(){this.children=[];this.visible=true;}
+    constructor(){this.children=[];this.visible=true;this.position={x:0,y:0,z:0};}
     add(object){this.children.push(object);}
     clear(){this.children=[];}
+    updateMatrixWorld(){}
     traverse(callback){callback(this);for(const child of this.children)child.traverse(callback);}
+  }
+  class Box {
+    setFromObject(object){
+      this.min={x:Infinity,y:Infinity,z:Infinity};
+      const visit=(node,parent)=>{
+        const world={x:parent.x+node.position.x,y:parent.y+node.position.y,z:parent.z+node.position.z};
+        for(const point of node.geometry?.vertices || [])
+          for(const [index,axis] of ['x','y','z'].entries())this.min[axis]=Math.min(this.min[axis],world[axis]+point[index]);
+        for(const child of node.children)visit(child,world);
+      };
+      visit(object,{x:0,y:0,z:0});return this;
+    }
   }
   class Vector {
     constructor(...values){this.values=values;}
@@ -30,7 +43,7 @@ async function fixture(){
     dispose(){this.disposals++;}
   }
   class Geometry {
-    constructor(valid=true){this.valid=valid;this.disposals=0;counters.geometries.push(this);}
+    constructor(valid=true,vertices=[]){this.valid=valid;this.vertices=vertices;this.disposals=0;counters.geometries.push(this);}
     computeBoundingBox(){}
     computeBoundingSphere(){this.boundingSphere={radius:this.valid?1:NaN};}
     dispose(){this.disposals++;}
@@ -44,12 +57,13 @@ async function fixture(){
     render(){counters.renders++;}
     dispose(){counters.rendererDisposals++;}
   }
-  const THREE={Scene:Group,Group,Camera,Matrix4:Matrix,Vector2:Vector,Vector3:Vector,MeshBasicMaterial:Material,ShaderMaterial:Material,PointsMaterial:Material,LineBasicMaterial:Material,Mesh,WebGLRenderer:Renderer,DoubleSide:2};
+  const THREE={Scene:Group,Group,Camera,Box3:Box,Matrix4:Matrix,Vector2:Vector,Vector3:Vector,MeshBasicMaterial:Material,ShaderMaterial:Material,PointsMaterial:Material,LineBasicMaterial:Material,Mesh,WebGLRenderer:Renderer,DoubleSide:2};
   class OBJLoader {
     parse(text){
       const model=new Group(),original=new Material();
       counters.importedMaterials.push(original);
-      model.add(new Mesh(new Geometry(!text.includes('# invalid bounds')),original));
+      const vertices=text.split('\n').filter(line=>/^v\s/.test(line)).map(line=>line.trim().split(/\s+/).slice(1,4).map(Number));
+      model.add(new Mesh(new Geometry(!text.includes('# invalid bounds'),vertices),original));
       return model;
     }
   }
@@ -143,6 +157,7 @@ test('basemap style replacement releases GPU resources and retains scene objects
   await layer.load(allEntries(),null);
   const [point,viewshed]=layer.loaded;
   layer.setEntryVisible(point.id,false);
+  layer.setGrounded(false);
   layer.setAlignment({active:true,viewId:'TorRiv.M',origin:[138.6,-34.9],heading:20,horizontalFov:70});
   const geometry=viewshed.model.children[0].geometry;
   layer.layer.render(null,[]);
@@ -154,6 +169,10 @@ test('basemap style replacement releases GPU resources and retains scene objects
   assert.equal(counters.renders,2);
   assert.equal(point.model.visible,false);
   assert.equal(viewshed.highlights[0].visible,true);
+  assert.equal(layer.grounded,false);
+  assert.equal(point.model.position.y,0);
+  layer.setGrounded(true);
+  assert.equal(point.model.position.y,-26);
   layer.clear();
   assert.equal(geometry.disposals,2);
   assert.equal(layer.visibleCount,0);
@@ -184,5 +203,88 @@ test('clearing an in-flight import prevents late files from entering the scene',
   assert.equal(summary.cancelled,true);
   assert.equal(layer.loaded.length,0);
   assert.equal(layer.group.children.length,0);
+  layer.dispose();
+});
+
+const heightEntry=(type,id,heights)=>({
+  name:`Park_10/${type}/Park_10__${id}__${type}.obj`,
+  readText:async()=>heights.map((h,i)=>`v ${281387+i} ${6134191+i} ${h}`).join('\n')+'\nf 1 2 3'
+});
+const near=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-6,`${actual} differs from ${expected}`);
+
+test('grounding uses one baseline per location and preserves camera height and 3D shape',async()=>{
+  const {layer}=await fixture();
+  await layer.load([
+    heightEntry('Frustums','A',[26.4,24.82,150]),
+    heightEntry('Points','A',[24.8,26.3,25]),
+    heightEntry('Viewsheds','A',[24.85,24.85,24.85]),
+    heightEntry('Points','B',[70,71.6,70.8]),
+    heightEntry('Frustums','B',[71.6,70.2,170])
+  ],null);
+  for(const object of layer.loaded) {
+    near(object.model.position.y,object.viewId==='A'?-24.8:-70);
+    assert.equal(object.model.position.x,0);assert.equal(object.model.position.z,0);
+  }
+  const frustum=layer.loaded[0],geometry=frustum.model.children[0].geometry;
+  near(geometry.vertices[0][1]+frustum.model.position.y,1.6);
+  near(geometry.vertices[2][1]-geometry.vertices[0][1],123.6);
+  near(Math.min(...layer.loaded.filter(e=>e.viewId==='A').map(e=>e.sourceMinHeight+e.model.position.y)),0);
+  const lowest=layer.loaded.find(e=>e.type==='Points'&&e.viewId==='A');
+  layer.setEntryVisible(lowest.id,false);layer.setGrounded(true);
+  near(frustum.model.position.y,-24.8);
+  layer.dispose();
+});
+
+test('grounding toggles restore original elevations without geometry changes or accumulated drift',async()=>{
+  const {layer,counters}=await fixture();
+  await layer.load([heightEntry('Points','A',[24.8,26.4,25]),heightEntry('Viewsheds','A',[24.85,25,26])],null);
+  const snapshots=layer.loaded.map(e=>JSON.stringify(e.model.children[0].geometry.vertices));
+  const geometries=counters.geometries.length;
+  for(let i=0;i<10;i++) {
+    layer.setGrounded(false);
+    assert.ok(layer.loaded.every(e=>e.model.position.y===0&&e.groundOffset===0));
+    layer.setGrounded(true);
+    for(const object of layer.loaded)near(object.model.position.y,-24.8);
+  }
+  assert.deepEqual(layer.loaded.map(e=>JSON.stringify(e.model.children[0].geometry.vertices)),snapshots);
+  assert.equal(counters.geometries.length,geometries);
+  assert.ok(counters.geometries.every(g=>g.disposals===0));
+  layer.dispose();
+});
+
+test('unmatched OBJ files ground independently rather than sharing a fabricated location',async()=>{
+  const {layer}=await fixture();
+  const first=heightEntry('Points','A',[10,12,11]),second=heightEntry('Points','B',[80,82,81]);
+  first.name='buildings/one.obj';second.name='buildings/two.obj';
+  await layer.load([first,second],null);
+  assert.deepEqual(layer.loaded.map(e=>e.viewId),['','']);
+  assert.deepEqual(layer.loaded.map(e=>e.model.position.y),[-10,-80]);
+  layer.dispose();
+});
+
+test('grounding handles negative elevations and scene-origin heights in projected units',async()=>{
+  const {layer}=await fixture();
+  await layer.load([heightEntry('Points','A',[-8,-6.4,-7])],null);
+  near(layer.loaded[0].model.position.y,8);
+  const local={name:'Park_10__A__Points.obj',readText:async()=> 'v 0 0 -4\nv 1 0 -2.4\nv 0 1 -3\nf 1 2 3'};
+  const reference={lod_source_frame:'SCENE_LOCAL',scene_origin:{easting_m:281387,northing_m:6134191,height_m:100}};
+  await layer.load([local,heightEntry('Points','B',[30,31.6,31])],reference);
+  near(layer.loaded[0].sourceMinHeight,96);near(layer.loaded[0].model.position.y,-96);
+  near(layer.loaded[1].sourceMinHeight,30);near(layer.loaded[1].model.position.y,-30);
+  layer.setGrounded(false);
+  assert.ok(layer.loaded.every(e=>e.model.position.y===0));
+  layer.dispose();
+});
+
+test('the chosen height mode survives replacement imports and file order does not change grounding',async()=>{
+  const {layer}=await fixture();
+  const objects=[heightEntry('Frustums','A',[27,25,130]),heightEntry('Points','A',[24,25.5,25])];
+  layer.setGrounded(false);await layer.load(objects,null);
+  assert.ok(layer.loaded.every(e=>e.model.position.y===0));
+  layer.setGrounded(true);
+  const offsets=new Map(layer.loaded.map(e=>[e.id,e.model.position.y]));
+  await layer.load([...objects].reverse(),null);
+  assert.ok(layer.grounded);
+  for(const object of layer.loaded)assert.equal(object.model.position.y,offsets.get(object.id));
   layer.dispose();
 });

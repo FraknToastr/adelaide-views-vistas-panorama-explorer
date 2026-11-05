@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Ground OBJ models at zero per location by default, preserving shared point/viewshed/frustum geometry and camera height; add a sidebar toggle to restore original elevations.
+
 - Added a location-based layer sidebar with individual 2D and 3D OBJ controls, mixed states and select all/none.
 - Added combined spatial ZIP imports while retaining all valid cone records.
 - Added camera-direction viewshed overlap and a light Park Lands theme; removed descriptive UI metadata and prose.

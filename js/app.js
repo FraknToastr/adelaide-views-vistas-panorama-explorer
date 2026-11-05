@@ -221,6 +221,8 @@ function renderTree() {
   $('expandAll').textContent=allExpanded?'Collapse all':'Expand all';
   $('expandAll').setAttribute('aria-expanded',String(allExpanded));
   $('zoomToSelection').disabled=!state.locations.has(state.selected);
+  $('groundObjLayers').disabled=!state.obj?.loaded.length;
+  $('groundObjLayers').checked=state.obj?.grounded??true;
   filterTree();updateCheckboxes();$('layerTree').scrollTop=scrollTop;
 }
 function filterTree() {
@@ -360,16 +362,6 @@ async function importObjFiles(files) {
   }catch(error){rebuildLocations();feedback('objFeedback',error.message,true);notify(error.message);}
   finally{state.loadingObj=false;}
 }
-async function loadSampleObj() {
-  try {
-    const [zip,reference]=await Promise.all([
-      fetch('samples/Park_10.zip').then(r=>{if(!r.ok)throw new Error('Sample unavailable.');return r.blob();}),
-      fetch('samples/export_reference.json').then(r=>{if(!r.ok)throw new Error('Reference unavailable.');return r.json();})
-    ]);
-    state.reference=reference;feedback('referenceFeedback','Loaded');
-    await importObjFiles([new File([zip],'Park_10.zip',{type:'application/zip'})]);
-  }catch(error){notify(error.message);}
-}
 function setMetroKey() {
   const key=$('metroKeyInput').value.trim();
   if(!key){feedback('metroFeedback','Enter an API key.',true);return;}
@@ -388,6 +380,7 @@ function wireUI() {
   $('sidebarScrim').onclick=()=>showSidebar(false);
   $('locationSearch').oninput=filterTree;
   $('zoomToSelection').onclick=zoomToSelection;
+  $('groundObjLayers').onchange=e=>state.obj?.setGrounded(e.target.checked);
   $('expandAll').onclick=()=>{
     const allExpanded=state.locations.size>0 && state.expanded.size===state.locations.size;
     state.expanded=allExpanded?new Set():new Set(state.locations.keys());
@@ -416,7 +409,7 @@ function wireUI() {
       state.reference=reference;feedback('referenceFeedback','Loaded');
     }catch(error){feedback('referenceFeedback',error.message,true);notify(error.message);}
   };
-  $('loadObjSample').onclick=loadSampleObj;$('applyMetro').onclick=setMetroKey;
+  $('applyMetro').onclick=setMetroKey;
   $('forgetMetro').onclick=()=>{try{localStorage.removeItem(METRO_STORAGE);}catch{/* optional */}state.metroKey='';$('metroKeyInput').value='';$('rememberMetro').checked=false;feedback('metroFeedback','');if(state.base==='metro')useBasemap('aerial');};
   $('prevView').onclick=()=>stepPhoto(-1);$('nextView').onclick=()=>stepPhoto(1);
   $('headingMinus').onclick=()=>updateHeading(-state.headingStep);$('headingPlus').onclick=()=>updateHeading(state.headingStep);

@@ -15,8 +15,11 @@
 *.[iI][nN][sS][vV]
 *.[mM][pP]4
 *.[mM][oO][vV]
-# User import archives are local; only the bundled geometry sample is versioned.
+# User import archives and 3D geometry are local and must never be uploaded.
 /FW__*.zip
+samples/*.zip
+*.obj
+*.mtl
 *:Zone.Identifier
 # Credentials, agent state, dependencies and generated artifacts.
 .env

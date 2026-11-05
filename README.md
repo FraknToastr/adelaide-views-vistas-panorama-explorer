@@ -59,6 +59,12 @@ The app uses shapefile geometry and PRJ information, rather than guessing coordi
 
 OBJ Easting/Northing/Height coordinates are rebased before conversion to GPU buffers. Scene-local coordinates require a matching scene origin. Materials are replaced with category colors; source OBJ textures are not loaded. The existing preview limits remain 110 MB of text per OBJ and 500 MB combined OBJ inputs.
 
+## OBJ grounding
+
+**Ground OBJ layers** in the sidebar is enabled by default. Each location's Point, Viewshed and Frustum models receive one shared vertical offset so their lowest imported geometry sits at zero. Their shapes and relative camera heights are preserved. Hidden layers participate in the same baseline calculation; unmatched files are grounded individually.
+
+Uncheck the control to restore original elevations. The selected mode survives OBJ imports and basemap changes for the current page session. Grounding changes model placement only, leaving source files and geometry buffers intact. It uses the lowest imported geometry as the ground baseline, rather than measuring terrain elevation. In the supplied TorRiv.M sample, this retains the camera at approximately 1.6 m above zero.
+
 ## Settings
 
 Heading calibration and the optional MetroMap API key use localStorage. The key is saved only when **Remember key in this browser** is checked. **Forget key** removes it from storage and the active session. Imagery tile requests send the key to MetroMap.

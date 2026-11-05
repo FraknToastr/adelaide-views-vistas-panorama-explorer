@@ -32,6 +32,7 @@
         <div class="sidebar-heading"><h1>Layers</h1><button class="icon-button" id="closeLayers" title="Close layers" aria-label="Close layers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
         <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="locationSearch" type="search" placeholder="Find a location" aria-label="Find a location"></label>
         <div class="bulk-actions"><button id="expandAll" class="text-button" aria-expanded="false">Expand all</button><span class="bulk-separator" aria-hidden="true">/</span><button id="layerSelectionToggle" class="text-button" aria-pressed="true">Select none</button><span aria-hidden="true">/</span><button id="zoomToSelection" class="text-button" title="Frame the selected location and its spatial layers" disabled>Zoom to selection</button></div>
+        <label class="ground-obj-control"><input id="groundObjLayers" type="checkbox" checked disabled>Ground OBJ layers</label>
         <div class="layer-tree" id="layerTree"></div>
         <div class="sidebar-empty" id="layersEmpty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h7l2 2h9v12H3z"/></svg><button class="text-button" id="sidebarImportBtn">Import data</button></div>
       </aside>
@@ -66,7 +67,7 @@
       <div class="import-row"><div><strong>3D OBJ layers</strong><span class="import-feedback" id="objFeedback" role="status"></span></div><div class="import-choices"><label class="choose-file">Files / ZIP<input type="file" id="objInput" accept=".obj,.zip,.json,.mtl" multiple></label><label class="choose-file secondary">Folder<input type="file" id="objFolderInput" webkitdirectory directory multiple></label></div></div>
       <div class="import-row"><div><strong>Reference JSON</strong><span class="import-feedback" id="referenceFeedback" role="status"></span></div><label class="choose-file">File<input type="file" id="referenceInput" accept=".json"></label></div>
     </div>
-    <div class="modal-actions"><button class="text-button" id="loadObjSample">Load Park 10 OBJ sample</button><button class="button primary" data-close="importModal">Done</button></div>
+    <div class="modal-actions"><button class="button primary" data-close="importModal">Done</button></div>
   </dialog>
   <dialog id="metroModal" class="modal compact" aria-labelledby="metroHeading">
     <div class="modal-top"><h2 id="metroHeading">MetroMap access</h2><button class="icon-button" data-close="metroModal" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
