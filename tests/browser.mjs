@@ -84,6 +84,17 @@ try {
   assert.deepEqual(await page.locator('.appearance-frame > legend').allTextContents(),['Spatial appearance','Locations']);
   await page.locator('#layersBtn').click();assert.equal(await page.locator('#layersPanel').isVisible(),false);
   await page.locator('#layersBtn').click();assert.equal(await page.locator('#layersPanel').isVisible(),true);
+  await page.locator('#importBtn').click();
+  for(const id of ['spatialInput','photosInput','objInput','objFolderInput','referenceInput']){
+    const input=page.locator('#'+id),label=input.locator('..');
+    await label.hover();
+    assert.equal(await input.evaluate(node=>getComputedStyle(node).pointerEvents),'none');
+    assert.equal(await label.evaluate(node=>{const r=node.getBoundingClientRect();return document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)===node;}),true);
+    assert.equal(await page.locator('#vistas-tooltip').isVisible(),true);
+    assert.equal(await page.locator('#vistas-tooltip').textContent(),await input.getAttribute('aria-label'));
+    await page.mouse.move(1,1);assert.equal(await page.locator('#vistas-tooltip').isVisible(),false);
+  }
+  await page.getByRole('button',{name:'Done',exact:true}).click();
   if(spatial&&photoFolder) {
     await page.locator('#importBtn').click();
     await page.locator('#spatialInput').setInputFiles(path.resolve(root,spatial));

@@ -7,7 +7,7 @@
   <title>Views &amp; Vistas · Adelaide Park Lands</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="css/styles.css?v=20261105-tooltips1">
+  <link rel="stylesheet" href="css/styles.css?v=20261105-importtips1">
   <script>
     // Report module-graph failures too: these happen before app.js can catch them.
     (()=>{
@@ -36,19 +36,19 @@
     {"imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
-      "./js/app.js": "./js/app.js?v=20261105-tooltips1",
-      "./js/core.js": "./js/core.js?v=20261105-tooltips1",
-      "./js/geo.js": "./js/geo.js?v=20261105-tooltips1",
-      "./js/importers.js": "./js/importers.js?v=20261105-tooltips1",
-      "./js/layers.js": "./js/layers.js?v=20261105-tooltips1",
-      "./js/alignment.js": "./js/alignment.js?v=20261105-tooltips1",
-      "./js/obj-map.js": "./js/obj-map.js?v=20261105-tooltips1",
-      "./js/panorama.js": "./js/panorama.js?v=20261105-tooltips1",
-      "./js/appearance.js": "./js/appearance.js?v=20261105-tooltips1",
-      "./js/tooltips.js": "./js/tooltips.js?v=20261105-tooltips1"
+      "./js/app.js": "./js/app.js?v=20261105-importtips1",
+      "./js/core.js": "./js/core.js?v=20261105-importtips1",
+      "./js/geo.js": "./js/geo.js?v=20261105-importtips1",
+      "./js/importers.js": "./js/importers.js?v=20261105-importtips1",
+      "./js/layers.js": "./js/layers.js?v=20261105-importtips1",
+      "./js/alignment.js": "./js/alignment.js?v=20261105-importtips1",
+      "./js/obj-map.js": "./js/obj-map.js?v=20261105-importtips1",
+      "./js/panorama.js": "./js/panorama.js?v=20261105-importtips1",
+      "./js/appearance.js": "./js/appearance.js?v=20261105-importtips1",
+      "./js/tooltips.js": "./js/tooltips.js?v=20261105-importtips1"
     }}
   </script>
-  <script id="appModule" type="module" src="js/app.js?v=20261105-tooltips1"></script>
+  <script id="appModule" type="module" src="js/app.js?v=20261105-importtips1"></script>
 </head>
 <body>
   <div class="shell">
@@ -101,10 +101,10 @@
   <dialog id="importModal" class="modal" aria-labelledby="importHeading">
     <div class="modal-top"><h2 id="importHeading">Data sources</h2><button class="icon-button" data-close="importModal" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
     <div class="import-list">
-      <div class="import-row"><div><strong>Viewpoints &amp; view cones</strong><span class="import-feedback" id="spatialFeedback" role="status"></span></div><label class="choose-file">Files / ZIP<input type="file" id="spatialInput" accept=".zip,.shp,.dbf,.shx,.prj,.cpg" multiple></label></div>
-      <div class="import-row"><div><strong>360° photographs</strong><span class="import-feedback" id="photosFeedback" role="status"></span></div><label class="choose-file">Folder<input type="file" id="photosInput" accept=".jpg,.jpeg,.png,.webp" webkitdirectory directory multiple></label></div>
-      <div class="import-row"><div><strong>3D Models</strong><span class="import-feedback" id="objFeedback" role="status"></span></div><div class="import-choices"><label class="choose-file">Files / ZIP<input type="file" id="objInput" accept=".obj,.zip,.json,.mtl" multiple></label><label class="choose-file secondary">Folder<input type="file" id="objFolderInput" webkitdirectory directory multiple></label></div></div>
-      <div class="import-row"><div><strong>Reference JSON</strong><span class="import-feedback" id="referenceFeedback" role="status"></span></div><label class="choose-file">File<input type="file" id="referenceInput" accept=".json"></label></div>
+      <div class="import-row"><div><strong>Viewpoints &amp; view cones</strong><span class="import-feedback" id="spatialFeedback" role="status"></span></div><label data-tooltip="Choose viewpoint and view-cone shapefiles or a ZIP" class="choose-file">Files / ZIP<input type="file" id="spatialInput" aria-label="Choose viewpoint and view-cone shapefiles or a ZIP" data-tooltip="Choose viewpoint and view-cone shapefiles or a ZIP" accept=".zip,.shp,.dbf,.shx,.prj,.cpg" multiple></label></div>
+      <div class="import-row"><div><strong>360° photographs</strong><span class="import-feedback" id="photosFeedback" role="status"></span></div><label data-tooltip="Choose a photo folder, including its subfolders" class="choose-file">Folder<input type="file" id="photosInput" aria-label="Choose a photo folder, including its subfolders" data-tooltip="Choose a photo folder, including its subfolders" accept=".jpg,.jpeg,.png,.webp" webkitdirectory directory multiple></label></div>
+      <div class="import-row"><div><strong>3D Models</strong><span class="import-feedback" id="objFeedback" role="status"></span></div><div class="import-choices"><label data-tooltip="Choose 3D model OBJ files or a ZIP" class="choose-file">Files / ZIP<input type="file" id="objInput" aria-label="Choose 3D model OBJ files or a ZIP" data-tooltip="Choose 3D model OBJ files or a ZIP" accept=".obj,.zip,.json,.mtl" multiple></label><label data-tooltip="Choose a 3D model folder, including its subfolders" class="choose-file secondary">Folder<input type="file" id="objFolderInput" aria-label="Choose a 3D model folder, including its subfolders" data-tooltip="Choose a 3D model folder, including its subfolders" webkitdirectory directory multiple></label></div></div>
+      <div class="import-row"><div><strong>Reference JSON</strong><span class="import-feedback" id="referenceFeedback" role="status"></span></div><label data-tooltip="Choose the reference JSON for scene-local 3D models" class="choose-file">File<input type="file" id="referenceInput" aria-label="Choose the reference JSON for scene-local 3D models" data-tooltip="Choose the reference JSON for scene-local 3D models" accept=".json"></label></div>
     </div>
     <div class="modal-actions"><button class="button primary" data-close="importModal">Done</button></div>
   </dialog>

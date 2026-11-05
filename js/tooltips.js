@@ -22,7 +22,7 @@ export function installTooltips(doc=document){
   }
   function position(){
     if(!active)return;
-    const rect=active.getBoundingClientRect(),margin=10,width=tip.offsetWidth,height=tip.offsetHeight;
+    const rect=(active.closest('.choose-file')||active).getBoundingClientRect(),margin=10,width=tip.offsetWidth,height=tip.offsetHeight;
     const x=hover===active&&pointer?pointer.x:rect.left+rect.width/2;
     const y=hover===active&&pointer?pointer.y:rect.bottom;
     const gap=hover===active&&pointer?40:12;
