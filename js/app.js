@@ -1,3 +1,4 @@
+import {installTooltips} from './tooltips.js';
 import * as THREE from 'three';
 import {DEFAULT_CENTER,viewId,photoReference,safeLabel} from './core.js';
 import {registerCRS,boundsFromFeatures,bearingLine} from './geo.js';
@@ -223,7 +224,7 @@ function buildMapLayerControls(){
       const layers=all.filter(layer=>layer.source===source&&layer.kind===kind);
       const input=checkbox(layers,title+' '+label,{source,kind});
       row.append(input,document.createTextNode(label));group.append(row);
-      if(source==='map'&&kind==='frustum')row.title='Photo/reference frustums derived from shapefile viewpoints';
+      if(source==='map'&&kind==='frustum')row.dataset.tooltip='Photo/reference frustums derived from shapefile viewpoints';
     }
     container.append(group);
   }
@@ -432,7 +433,7 @@ function wireUI() {
     for(const [id,selector,label] of [['mapFullscreen','.map-pane','map'],['panoFullscreen','.pano-pane','panorama']]){
       const active=document.fullscreenElement===document.querySelector(selector),button=$(id);
       button.setAttribute('aria-pressed',String(active));
-      button.title=active?'Exit fullscreen '+label:'Fullscreen '+label;button.setAttribute('aria-label',button.title);
+      button.dataset.tooltip=active?'Exit fullscreen '+label:'Fullscreen '+label;button.setAttribute('aria-label',button.dataset.tooltip);
     }
     state.map?.resize();state.viewer?.resize();
   });
@@ -458,10 +459,10 @@ function wireUI() {
     state.headingStep=state.headingStep===5?1:5;
     const step=state.headingStep,next=step===5?1:5,unit=step===1?'degree':'degrees';
     $('headingStepToggle').textContent=step+'°';
-    $('headingStepToggle').title='Heading step: '+step+'°. Switch to '+next+'°.';
+    $('headingStepToggle').dataset.tooltip='Heading step: '+step+'°. Switch to '+next+'°.';
     $('headingStepToggle').setAttribute('aria-label','Heading step: '+step+' '+unit+'. Switch to '+next+' '+(next===1?'degree':'degrees')+'.');
     for(const [id,sign,word] of [['headingMinus','−','minus'],['headingPlus','+','plus']]) {
-      $(id).title='Calibrate heading '+sign+step+'°';
+      $(id).dataset.tooltip='Calibrate heading '+sign+step+'°';
       $(id).setAttribute('aria-label','Calibrate heading '+word+' '+step+' '+unit);
     }
   };
@@ -470,7 +471,7 @@ function wireUI() {
     state.compassShown=!state.compassShown;
     const label=(state.compassShown?'Hide':'Show')+' centre compass line';
     $('photoCompassToggle').setAttribute('aria-pressed',String(state.compassShown));
-    $('photoCompassToggle').setAttribute('aria-label',label);$('photoCompassToggle').title=label;
+    $('photoCompassToggle').setAttribute('aria-label',label);$('photoCompassToggle').dataset.tooltip=label;
     updatePhotoCompass();
   };
   $('panoFullscreen').onclick=()=>toggleFullscreen('.pano-pane');
@@ -502,7 +503,7 @@ function bootstrap() {
   state.map.on('pitch',()=>{
     const active=state.map.getPitch()>10,button=$('pitchBtn'),mode=active?'3D':'2D',next=active?'2D':'3D';
     button.textContent=mode;button.setAttribute('aria-pressed',String(active));
-    button.title='Map view: '+mode+'. Switch to '+next+'.';button.setAttribute('aria-label',button.title);
+    button.dataset.tooltip='Map view: '+mode+'. Switch to '+next+'.';button.setAttribute('aria-label',button.dataset.tooltip);
   });
   state.map.on('error',e=>{if(state.base==='metro'&&/401|403/.test(String(e.error?.message||'')))notify('MetroMap rejected the API key.');});
   const resize=new ResizeObserver(()=>state.map.resize());resize.observe(document.querySelector('.map-pane'));
@@ -510,4 +511,6 @@ function bootstrap() {
   document.documentElement.dataset.appState='ready';
 }
 window.addEventListener('unhandledrejection',event=>notify(event.reason?.message || 'Unable to complete the action.'));
+const disposeTooltips=installTooltips();
+window.addEventListener('pagehide',event=>{if(!event.persisted)disposeTooltips();});
 try{bootstrap();}catch(error){document.documentElement.dataset.appState='error';notify(error.message);console.error(error);}
