@@ -64,7 +64,7 @@ The local TorRiv.M sample had approximately 6.1 m of horizontal display error wi
 
 ## Spatial appearance
 
-The framed **Spatial appearance** controls sit above the framed **Locations** search controls. Each of **3D Models** and **Shapefiles** has a Line/Fill pill that selects which colour and transparency to edit. Both lines and fills remain displayed. Transparency runs from 0% opaque to 100% invisible; each choice retains its own values. Settings apply globally to existing and future imports, survive basemap changes and browser reloads, and can be restored using **Reset appearance**. Points initially remain opaque until fill transparency is edited. Camera direction and alignment highlights retain their distinct styling.
+The framed **Spatial appearance** controls sit above the framed **Locations** search controls. Each of **3D Models** and **Shapefiles** has a Point/Line/Fill pill that selects which colour and transparency to edit. All three remain displayed independently. Transparency runs from 0% opaque to 100% invisible; each choice retains its own values. Points default to opaque yellow. Settings apply globally to existing and future imports, survive basemap changes and browser reloads, and can be restored using **Reset appearance**. Camera direction and alignment highlights retain their distinct styling.
 
 ## Blender add-ons
 

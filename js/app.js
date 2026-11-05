@@ -35,12 +35,12 @@ function buildAppearanceControls(){
       slider.setAttribute('aria-label',title+' '+active+' transparency');
       output.textContent=slider.value+'%';
     };
-    for(const part of ['line','fill']){
-      const button=element('button','',part==='line'?'Line':'Fill');button.type='button';button.dataset.part=part;
+for(const part of ['point','line','fill']){
+const button=element('button','',part[0].toUpperCase()+part.slice(1));button.type='button';button.dataset.part=part;
       button.onclick=()=>{active=part;sync();};pills.append(button);
     }
     color.oninput=()=>{appearance[group][active].color=color.value;updateAppearance();};
-    slider.oninput=()=>{appearance[group][active].transparency=Number(slider.value);if(active==='fill')appearance[group].fill.pointTransparency=Number(slider.value);output.textContent=slider.value+'%';updateAppearance();};
+slider.oninput=()=>{appearance[group][active].transparency=Number(slider.value);output.textContent=slider.value+'%';updateAppearance();};
     row.append(pills,color);
     const transparency=element('label','appearance-transparency');transparency.htmlFor=slider.id;
     transparency.append(element('span','','Transparency'),slider,output);

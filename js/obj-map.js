@@ -128,10 +128,10 @@ export class ObjMapLayer {
     const highlights=new Set(entry.highlights);
     entry.model.traverse(child=>{
       if(!child.material||highlights.has(child))return;
-      const part=child.isLine?'line':'fill',value=this.appearance[part];
+const part=(child.isPoints||entry.type==='Points')?'point':child.isLine?'line':'fill',value=this.appearance[part];
       for(const material of [child.material].flat()){
         material.color.set(value.color);
-        material.opacity=1-((child.isPoints||entry.type==='Points')?(value.pointTransparency??value.transparency):value.transparency)/100;
+material.opacity=1-value.transparency/100;
         material.transparent=material.opacity<1;
         material.depthWrite=material.opacity===1;
         material.needsUpdate=true;

@@ -138,15 +138,15 @@ test('v1.3.1 combined exports split into location-associated categories with sha
 
 test('appearance and grounding reuse geometry and leave the alignment highlight material intact',async()=>{
   const {layer,counters}=await fixture();
-  const appearance={line:{color:'#ffffff',transparency:100},fill:{color:'#ff0000',transparency:50,pointTransparency:0}};
+const appearance={point:{color:'#ffff00',transparency:25},line:{color:'#ffffff',transparency:100},fill:{color:'#ff0000',transparency:50}};
   layer.setAppearance(appearance);await layer.load(allEntries(),null);
   const highlight=layer.loaded[1].highlights[0].material;
   const count=counters.geometries.length;
   for(const e of layer.loaded){
     const mesh=e.model.children[0],edge=mesh.children.find(c=>c.isLine);
-    assert.equal(mesh.material.color.value,'#ff0000');
-    assert.equal(mesh.material.opacity,e.type==='Points'?1:.5);
-    assert.equal(edge.material.opacity,0);assert.equal(edge.material.depthWrite,false);
+assert.equal(mesh.material.color.value,e.type==='Points'?'#ffff00':'#ff0000');
+assert.equal(mesh.material.opacity,e.type==='Points'?.75:.5);
+assert.equal(edge.material.opacity,e.type==='Points'?.75:0);assert.equal(edge.material.depthWrite,false);
   }
   for(let i=0;i<5;i++){layer.setAppearance(appearance);layer.setGrounded(i%2===0);}
   assert.equal(counters.geometries.length,count);
