@@ -499,6 +499,7 @@ function bootstrap() {
   state.map.on('error',e=>{if(state.base==='metro'&&/401|403/.test(String(e.error?.message||'')))notify('MetroMap rejected the API key.');});
   const resize=new ResizeObserver(()=>state.map.resize());resize.observe(document.querySelector('.map-pane'));
   window.addEventListener('pagehide',event=>{if(event.persisted)return;state.viewer.dispose();resize.disconnect();state.obj.clear();state.map.remove();});
+  document.documentElement.dataset.appState='ready';
 }
 window.addEventListener('unhandledrejection',event=>notify(event.reason?.message || 'Unable to complete the action.'));
-try{bootstrap();}catch(error){notify(error.message);console.error(error);}
+try{bootstrap();}catch(error){document.documentElement.dataset.appState='error';notify(error.message);console.error(error);}

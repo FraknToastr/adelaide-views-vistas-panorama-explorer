@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Version local module URLs together to avoid mixed cached code after updates; show startup failures even when the app module cannot load.
 - Correct OBJ/shapefile alignment by reprojecting each vertex into a cached local Mercator frame, including camera-highlight origins and Zoom to Selection.
 - Support combined Blender 1.3.1 location exports alongside separate-category 1.3.2 exports; preserve shared grounding and independent category visibility.
 - Add global Line/Fill colour and transparency controls, remembered appearance settings, reset, and cached OBJ edge overlays.

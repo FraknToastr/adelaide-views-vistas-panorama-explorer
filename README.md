@@ -10,6 +10,8 @@ Example: `python3 -m http.server 8765`, then open http://localhost:8765.
 
 The application uses pinned, externally hosted MapLibre, Three.js, shpjs, JSZip and proj4 libraries. Basemap imagery also requires a network connection.
 
+If the page opens but controls are unresponsive after an update, hard-refresh with **Ctrl+Shift+R**. Local modules use matching versioned URLs to prevent an older cached dependency from being mixed with newer code. Module-loading failures display an on-screen startup error.
+
 ## Import
 
 1. Open **Import data** and choose the spatial ZIP under **Viewpoints & view cones**. A ZIP containing both shapefiles loads them together. Separate shapefile ZIPs and matching loose SHP/DBF/PRJ files also work.
@@ -90,6 +92,8 @@ npm run test:browser
 ```
 
 The unit suite covers source grouping, multi-shapefile imports, recursive metadata-only photo indexing, ambiguity handling, directional clipping with holes and multipart polygons, panorama races and resource cleanup, and individual OBJ visibility and style lifecycle.
+
+When releasing changes to local JavaScript or CSS, update their shared release token in `index.html` together. Startup regression checks verify complete module mappings at both localhost and GitHub Pages project URLs.
 
 The browser check requires an installed Playwright package and its matching Chromium runtime. It looks for a compatible package/browser pair in project, global npm and npm cache packages, or accepts an absolute package location through `PLAYWRIGHT_MODULE`. No package installation is performed by the check.
 
