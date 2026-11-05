@@ -499,7 +499,11 @@ function bootstrap() {
   state.map.on('click','vistas-points',e=>{const feature=e.features?.[0];if(feature)selectView(viewId(feature.properties));});
   state.map.on('mouseenter','vistas-points',()=>state.map.getCanvas().style.cursor='pointer');
   state.map.on('mouseleave','vistas-points',()=>state.map.getCanvas().style.cursor='');
-  state.map.on('pitch',()=>$('pitchBtn').setAttribute('aria-pressed',String(state.map.getPitch()>10)));
+  state.map.on('pitch',()=>{
+    const active=state.map.getPitch()>10,button=$('pitchBtn'),mode=active?'3D':'2D',next=active?'2D':'3D';
+    button.textContent=mode;button.setAttribute('aria-pressed',String(active));
+    button.title='Map view: '+mode+'. Switch to '+next+'.';button.setAttribute('aria-label',button.title);
+  });
   state.map.on('error',e=>{if(state.base==='metro'&&/401|403/.test(String(e.error?.message||'')))notify('MetroMap rejected the API key.');});
   const resize=new ResizeObserver(()=>state.map.resize());resize.observe(document.querySelector('.map-pane'));
   window.addEventListener('pagehide',event=>{if(event.persisted)return;state.viewer.dispose();resize.disconnect();state.obj.clear();state.map.remove();});

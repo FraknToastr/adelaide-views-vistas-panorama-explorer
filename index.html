@@ -7,7 +7,7 @@
   <title>Views &amp; Vistas · Adelaide Park Lands</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="css/styles.css?v=20261105-pointappearance1">
+  <link rel="stylesheet" href="css/styles.css?v=20261105-mapmodetext1">
   <script>
     // Report module-graph failures too: these happen before app.js can catch them.
     (()=>{
@@ -36,18 +36,18 @@
     {"imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
-    "./js/app.js": "./js/app.js?v=20261105-pointappearance1",
-    "./js/core.js": "./js/core.js?v=20261105-pointappearance1",
-    "./js/geo.js": "./js/geo.js?v=20261105-pointappearance1",
-    "./js/importers.js": "./js/importers.js?v=20261105-pointappearance1",
-    "./js/layers.js": "./js/layers.js?v=20261105-pointappearance1",
-    "./js/alignment.js": "./js/alignment.js?v=20261105-pointappearance1",
-    "./js/obj-map.js": "./js/obj-map.js?v=20261105-pointappearance1",
-    "./js/panorama.js": "./js/panorama.js?v=20261105-pointappearance1",
-    "./js/appearance.js": "./js/appearance.js?v=20261105-pointappearance1"
+      "./js/app.js": "./js/app.js?v=20261105-mapmodetext1",
+      "./js/core.js": "./js/core.js?v=20261105-mapmodetext1",
+      "./js/geo.js": "./js/geo.js?v=20261105-mapmodetext1",
+      "./js/importers.js": "./js/importers.js?v=20261105-mapmodetext1",
+      "./js/layers.js": "./js/layers.js?v=20261105-mapmodetext1",
+      "./js/alignment.js": "./js/alignment.js?v=20261105-mapmodetext1",
+      "./js/obj-map.js": "./js/obj-map.js?v=20261105-mapmodetext1",
+      "./js/panorama.js": "./js/panorama.js?v=20261105-mapmodetext1",
+      "./js/appearance.js": "./js/appearance.js?v=20261105-mapmodetext1"
     }}
   </script>
-  <script id="appModule" type="module" src="js/app.js?v=20261105-pointappearance1"></script>
+  <script id="appModule" type="module" src="js/app.js?v=20261105-mapmodetext1"></script>
 </head>
 <body>
   <div class="shell">
@@ -80,7 +80,7 @@
           <div class="map-tools">          <div class="map-layer-widget">
             <button class="icon-button" id="mapLayersBtn" title="Map layers" aria-label="Map layers" aria-expanded="false" aria-controls="mapLayerPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 17l9 5 9-5"/></svg></button>
             <div class="map-layer-panel surface" id="mapLayerPanel" hidden><div id="mapLayerControls"></div></div>
-          </div><button class="icon-button" id="pitchBtn" title="Toggle 3D map view" aria-label="Toggle 3D map view" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5v10l-9 5-9-5V7l9-5Zm-9 5 9 5 9-5M12 12v10M7.5 4.5l9 5"/></svg></button><button class="icon-button" id="fitBtn" title="Fit locations" aria-label="Fit locations"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg></button><button class="icon-button" id="metroKeyBtn" title="MetroMap API key" aria-label="MetroMap API key"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="15" cy="8" r="5"/><path d="m11 12-8 8v-4l2-2h3l1-3"/></svg></button><button class="icon-button" id="mapFullscreen" title="Fullscreen map" aria-label="Fullscreen map" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5m6 0h5v5M20 15v5h-5M9 20H4v-5"/></svg></button></div>
+          </div><button class="map-mode-button" id="pitchBtn" title="Map view: 2D. Switch to 3D." aria-label="Map view: 2D. Switch to 3D." aria-pressed="false">2D</button><button class="icon-button" id="fitBtn" title="Fit locations" aria-label="Fit locations"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg></button><button class="icon-button" id="metroKeyBtn" title="MetroMap API key" aria-label="MetroMap API key"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="15" cy="8" r="5"/><path d="m11 12-8 8v-4l2-2h3l1-3"/></svg></button><button class="icon-button" id="mapFullscreen" title="Fullscreen map" aria-label="Fullscreen map" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5m6 0h5v5M20 15v5h-5M9 20H4v-5"/></svg></button></div>
         </div></div>
       </section>
       <section class="pane pano-pane" aria-label="360 degree panorama viewer">
