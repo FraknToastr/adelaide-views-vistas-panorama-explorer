@@ -7,7 +7,7 @@
   <title>Views &amp; Vistas · Adelaide Park Lands</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="css/styles.css?v=20261105-startup1">
+  <link rel="stylesheet" href="css/styles.css?v=20261105-compact2">
   <script>
     // Report module-graph failures too: these happen before app.js can catch them.
     (()=>{
@@ -36,18 +36,18 @@
     {"imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
-      "./js/app.js": "./js/app.js?v=20261105-startup1",
-      "./js/core.js": "./js/core.js?v=20261105-startup1",
-      "./js/geo.js": "./js/geo.js?v=20261105-startup1",
-      "./js/importers.js": "./js/importers.js?v=20261105-startup1",
-      "./js/layers.js": "./js/layers.js?v=20261105-startup1",
-      "./js/alignment.js": "./js/alignment.js?v=20261105-startup1",
-      "./js/obj-map.js": "./js/obj-map.js?v=20261105-startup1",
-      "./js/panorama.js": "./js/panorama.js?v=20261105-startup1",
-      "./js/appearance.js": "./js/appearance.js?v=20261105-startup1"
+      "./js/app.js": "./js/app.js?v=20261105-compact2",
+      "./js/core.js": "./js/core.js?v=20261105-compact2",
+      "./js/geo.js": "./js/geo.js?v=20261105-compact2",
+      "./js/importers.js": "./js/importers.js?v=20261105-compact2",
+      "./js/layers.js": "./js/layers.js?v=20261105-compact2",
+      "./js/alignment.js": "./js/alignment.js?v=20261105-compact2",
+      "./js/obj-map.js": "./js/obj-map.js?v=20261105-compact2",
+      "./js/panorama.js": "./js/panorama.js?v=20261105-compact2",
+      "./js/appearance.js": "./js/appearance.js?v=20261105-compact2"
     }}
   </script>
-  <script id="appModule" type="module" src="js/app.js?v=20261105-startup1"></script>
+  <script id="appModule" type="module" src="js/app.js?v=20261105-compact2"></script>
 </head>
 <body>
   <div class="shell">
@@ -59,27 +59,29 @@
     <main class="workspace" id="workspace">
       <aside class="sidebar" id="layersPanel" aria-label="Layer selector">
         <fieldset class="appearance-frame"><legend>Spatial appearance</legend>
-          <label class="ground-obj-control"><input id="groundObjLayers" type="checkbox" checked disabled>Ground OBJ layers</label>
+          <label class="ground-obj-control"><input id="groundObjLayers" type="checkbox" checked disabled>Ground 3D Models</label>
           <div id="appearanceControls"></div>
           <button class="text-button" id="resetAppearance">Reset appearance</button>
         </fieldset>
-        <fieldset class="appearance-frame layers-frame"><legend>Layers</legend>
+        <fieldset class="appearance-frame layers-frame"><legend>Locations</legend>
           <div class="layers-search-row">
             <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="locationSearch" type="search" placeholder="Find a location" aria-label="Find a location"></label>
             <button class="icon-button" id="closeLayers" title="Close layers" aria-label="Close layers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
           </div>
-          <div class="bulk-actions"><button id="expandAll" class="text-button" aria-expanded="false">Expand all</button><span class="bulk-separator" aria-hidden="true">/</span><button id="layerSelectionToggle" class="text-button" aria-pressed="true">Select none</button><span aria-hidden="true">/</span><button id="zoomToSelection" class="text-button" title="Frame the selected location and its spatial layers" disabled>Zoom to selection</button></div>
+          <div class="location-actions"><button id="zoomToSelection" class="text-button" title="Frame the selected location and its spatial layers" disabled>Zoom to selection</button></div>
         </fieldset>
         <div class="layer-tree" id="layerTree"></div>
       </aside>
       <button class="sidebar-scrim" id="sidebarScrim" aria-label="Close layers" tabindex="-1"></button>
       <section class="pane map-pane" aria-label="Interactive map">
         <div id="map" aria-label="Map of Adelaide viewpoints"></div>
-        <div class="map-top">
+        <div class="map-top"><div class="map-toolbar surface" role="group" aria-label="Map controls">
           <div class="basemap-tabs" role="group" aria-label="Basemap"><button class="basemap-btn" data-base="aerial" aria-pressed="true">Aerial</button><button class="basemap-btn" data-base="topo" aria-pressed="false">Topographic</button><button class="basemap-btn" data-base="metro" aria-pressed="false">MetroMap</button></div>
-          <button class="icon-button surface" id="metroKeyBtn" title="MetroMap API key" aria-label="MetroMap API key"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="15" cy="8" r="5"/><path d="m11 12-8 8v-4l2-2h3l1-3"/></svg></button>
-        </div>
-        <div class="map-side"><button class="icon-button surface" id="fitBtn" title="Fit locations" aria-label="Fit locations"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/></svg></button><button class="icon-button surface" id="pitchBtn" title="Toggle 3D map view" aria-label="Toggle 3D map view" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3-9 5 9 5 9-5-9-5ZM3 13l9 5 9-5M3 18l9 5 9-5"/></svg></button></div>
+          <div class="map-tools">          <div class="map-layer-widget">
+            <button class="icon-button" id="mapLayersBtn" title="Map layers" aria-label="Map layers" aria-expanded="false" aria-controls="mapLayerPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 17l9 5 9-5"/></svg></button>
+            <div class="map-layer-panel surface" id="mapLayerPanel" hidden><div id="mapLayerControls"></div></div>
+          </div><button class="icon-button" id="pitchBtn" title="Toggle 3D map view" aria-label="Toggle 3D map view" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5v10l-9 5-9-5V7l9-5Zm-9 5 9 5 9-5M12 12v10M7.5 4.5l9 5"/></svg></button><button class="icon-button" id="fitBtn" title="Fit locations" aria-label="Fit locations"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg></button><button class="icon-button" id="metroKeyBtn" title="MetroMap API key" aria-label="MetroMap API key"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="15" cy="8" r="5"/><path d="m11 12-8 8v-4l2-2h3l1-3"/></svg></button><button class="icon-button" id="mapFullscreen" title="Fullscreen map" aria-label="Fullscreen map" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5m6 0h5v5M20 15v5h-5M9 20H4v-5"/></svg></button></div>
+        </div></div>
       </section>
       <section class="pane pano-pane" aria-label="360 degree panorama viewer">
         <div id="panoCanvas" class="pano-canvas"></div>
@@ -100,7 +102,7 @@
     <div class="import-list">
       <div class="import-row"><div><strong>Viewpoints &amp; view cones</strong><span class="import-feedback" id="spatialFeedback" role="status"></span></div><label class="choose-file">Files / ZIP<input type="file" id="spatialInput" accept=".zip,.shp,.dbf,.shx,.prj,.cpg" multiple></label></div>
       <div class="import-row"><div><strong>360° photographs</strong><span class="import-feedback" id="photosFeedback" role="status"></span></div><label class="choose-file">Folder<input type="file" id="photosInput" accept=".jpg,.jpeg,.png,.webp" webkitdirectory directory multiple></label></div>
-      <div class="import-row"><div><strong>3D OBJ layers</strong><span class="import-feedback" id="objFeedback" role="status"></span></div><div class="import-choices"><label class="choose-file">Files / ZIP<input type="file" id="objInput" accept=".obj,.zip,.json,.mtl" multiple></label><label class="choose-file secondary">Folder<input type="file" id="objFolderInput" webkitdirectory directory multiple></label></div></div>
+      <div class="import-row"><div><strong>3D Models</strong><span class="import-feedback" id="objFeedback" role="status"></span></div><div class="import-choices"><label class="choose-file">Files / ZIP<input type="file" id="objInput" accept=".obj,.zip,.json,.mtl" multiple></label><label class="choose-file secondary">Folder<input type="file" id="objFolderInput" webkitdirectory directory multiple></label></div></div>
       <div class="import-row"><div><strong>Reference JSON</strong><span class="import-feedback" id="referenceFeedback" role="status"></span></div><label class="choose-file">File<input type="file" id="referenceInput" accept=".json"></label></div>
     </div>
     <div class="modal-actions"><button class="button primary" data-close="importModal">Done</button></div>

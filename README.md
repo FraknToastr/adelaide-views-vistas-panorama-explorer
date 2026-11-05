@@ -16,24 +16,21 @@ If the page opens but controls are unresponsive after an update, hard-refresh wi
 
 1. Open **Import data** and choose the spatial ZIP under **Viewpoints & view cones**. A ZIP containing both shapefiles loads them together. Separate shapefile ZIPs and matching loose SHP/DBF/PRJ files also work.
 2. Under **360° photographs**, choose the parent photo folder. All nested subfolders are indexed automatically. Relative paths such as `20260710/IMG_20260709_125554_00_013` match the source `360IMG` attribute.
-3. Optionally choose an OBJ ZIP, OBJ files or a directory under **3D OBJ layers**. Model and photograph data are supplied locally and are not bundled in the public repository.
+3. Optionally choose an OBJ ZIP, OBJ files or a directory under **3D Models**. Model and photograph data are supplied locally and are not bundled in the public repository.
 4. Import **Reference JSON** when OBJ coordinates are scene-local rather than projected Easting/Northing/Height.
 5. Select a location in the sidebar or click its map point.
 
 Local source files are read in the browser; the application does not upload them. Photo-folder selection indexes file names and paths only. It does not read or decode image contents, create photo URLs or preload images. A selected location can then load its matching photo.
 
-## Layer selector
+## Locations and map controls
 
-The **Layers** button opens or closes the sidebar. Search by park/local label or viewpoint ID. Location labels use `PARK_NAME`, with `VIEW_ID` to distinguish viewpoints. **Expand all** opens every location branch and becomes **Collapse all** when all branches are open.
+The **Layers** button opens or closes a simple location sidebar. Search by local/park name or viewpoint ID, then select a location to view its photo. Locations have no expansion buttons or visibility checkboxes. **Zoom to selection** frames the selected location without changing visibility.
 
-Each location contains **Point**, **Viewshed** and **Frustum** controls. Expand a location to see its individual map and **3D OBJ** layers. OBJ files remain individually toggleable; location and category checkboxes toggle all their children and show mixed states.
+One compact map panel contains the basemap buttons, global layer selector, cube **2D/3D** toggle, target **Fit locations** control, **MetroMap API key**, and fullscreen. Search remains in the sidebar. Fullscreen uses the same icon and behaviour as the photo viewer.
 
-- **Select none** disables every loaded layer, including entries outside the search results; it becomes **Select all** until every layer is enabled again.
-- Expanding or selecting a location does not change visibility. **Zoom to selection** frames the active location and its associated point, cones and OBJ geometry without changing layer visibility.
-- Visibility survives basemap changes and photo navigation. New OBJ entries inherit hidden location/category states.
-- Separate-category OBJ names such as `Park_10__TorRiv.M__Viewsheds.obj` associate with viewpoint `TorRiv.M`. Combined 1.3.1 exports such as `Park_10__TorRiv.M.obj` are separated internally by their generated Point/Viewshed/Frustum object names. Files without a recognizable location token remain available under **Other layers**.
-- Viewpoints without photos remain selectable.
-- Shapefile cone polygons are the 2D viewshed representation. Optional OBJ viewsheds and frustums are separate 3D layers.
+The map layer selector has **Shapefile** and **3D Models** groups, each with Points, Viewsheds and Frustums checkboxes and its own **Select all / Select none** toggle. Actions affect all loaded locations, even when the sidebar is filtered. Empty categories are disabled. Category choices survive location selection and basemap changes and apply to later imports for the current page session. Shapefile frustums are camera/reference sectors derived from viewpoint attributes.
+
+Both separate-category models and combined Blender 1.3.1 exports associate with locations by VIEW_ID. The importer separates combined models internally so the global category controls continue to work.
 
 ## Photo direction and rendering
 
@@ -65,7 +62,7 @@ The local TorRiv.M sample had approximately 6.1 m of horizontal display error wi
 
 ## Spatial appearance
 
-The framed **Spatial appearance** controls sit above the framed **Layers** search and visibility controls. Each of **3D objects** and **Shapefiles** has a Line/Fill pill that selects which colour and transparency to edit. Both lines and fills remain displayed. Transparency runs from 0% opaque to 100% invisible; each choice retains its own values. Settings apply globally to existing and future imports, survive basemap changes and browser reloads, and can be restored using **Reset appearance**. Points initially remain opaque until fill transparency is edited. Camera direction and alignment highlights retain their distinct styling.
+The framed **Spatial appearance** controls sit above the framed **Locations** search controls. Each of **3D Models** and **Shapefiles** has a Line/Fill pill that selects which colour and transparency to edit. Both lines and fills remain displayed. Transparency runs from 0% opaque to 100% invisible; each choice retains its own values. Settings apply globally to existing and future imports, survive basemap changes and browser reloads, and can be restored using **Reset appearance**. Points initially remain opaque until fill transparency is edited. Camera direction and alignment highlights retain their distinct styling.
 
 ## Blender add-ons
 
@@ -73,7 +70,7 @@ The original 1.3.1 and 1.3.2 add-on ZIPs are in `Blender/`. Version 1.3.1 is the
 
 ## OBJ grounding
 
-**Ground OBJ layers** in the sidebar is enabled by default. Each location's Point, Viewshed and Frustum models receive one shared vertical offset so their lowest imported geometry sits at zero. Their shapes and relative camera heights are preserved. Hidden layers participate in the same baseline calculation; unmatched files are grounded individually.
+**Ground 3D Models** in the sidebar is enabled by default. Each location's Point, Viewshed and Frustum models receive one shared vertical offset so their lowest imported geometry sits at zero. Their shapes and relative camera heights are preserved. Hidden layers participate in the same baseline calculation; unmatched files are grounded individually.
 
 Uncheck the control to restore original elevations. The selected mode survives OBJ imports and basemap changes for the current page session. Grounding changes model placement only, leaving source files and geometry buffers intact. It uses the lowest imported geometry as the ground baseline, rather than measuring terrain elevation. In the supplied TorRiv.M sample, this retains the camera at approximately 1.6 m above zero.
 

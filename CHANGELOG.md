@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Simplify the sidebar to searchable locations; move visibility to global map controls with independent Shapefile/3D Models select-all toggles and future-import category preferences.
+- Combine basemap, layers, 2D/3D, fit, API key and fullscreen controls in a compact map panel; standardize visible model labels as 3D Models.
+- Add map fullscreen with shared panorama behaviour, distinct fit/3D icons, and a six-category map layer widget synchronized with the sidebar.
 - Version local module URLs together to avoid mixed cached code after updates; show startup failures even when the app module cannot load.
 - Correct OBJ/shapefile alignment by reprojecting each vertex into a cached local Mercator frame, including camera-highlight origins and Zoom to Selection.
 - Support combined Blender 1.3.1 location exports alongside separate-category 1.3.2 exports; preserve shared grounding and independent category visibility.

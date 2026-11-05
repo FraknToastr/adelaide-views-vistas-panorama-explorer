@@ -5,13 +5,12 @@ import {readShapefiles,readObjEntries,collectPanoramaFiles} from './importers.js
 import {PanoramaViewer} from './panorama.js';
 import {ObjMapLayer} from './obj-map.js';
 import {defaultAppearance,loadAppearance,saveAppearance,applyShapeAppearance} from './appearance.js';
-import {buildLocations,LAYER_KINDS,checkboxState,setLayersVisible,inheritVisibility,createPhotoIndex} from './layers.js';
+import {buildLocations,checkboxState,setLayersVisible,inheritVisibility,createPhotoIndex} from './layers.js';
 import {prepareViewshed,clipViewshed,cameraSector,sourceSectors} from './alignment.js';
 
 const $=id=>document.getElementById(id);
 const EMPTY={type:'FeatureCollection',features:[]};
 const METRO_STORAGE='uos.vistas.metromap.key.v1';
-const labels={point:'Point',viewshed:'Viewshed',frustum:'Frustum',other:'Other'};
 let appearance=loadAppearance();
 function updateAppearance(){
   applyShapeAppearance(state.map,appearance.shape);
@@ -20,7 +19,7 @@ function updateAppearance(){
 }
 function buildAppearanceControls(){
   const container=$('appearanceControls');container.replaceChildren();
-  for(const [group,title] of [['obj','3D objects'],['shape','Shapefiles']]){
+  for(const [group,title] of [['obj','3D Models'],['shape','Shapefiles']]){
     let active='fill';
     const section=element('section','appearance-section');
     section.append(element('h2','',title));
@@ -50,7 +49,7 @@ function buildAppearanceControls(){
 }
 export const state={
   map:null,obj:null,viewer:null,pointRecords:[],cones:[],locations:new Map(),
-  visibility:new Map(),defaultVisible:true,expanded:new Set(),checkboxes:[],
+  visibility:new Map(),defaultVisible:true,categoryVisibility:new Map(),checkboxes:[],groupToggles:[],
   photoIndex:createPhotoIndex(),photoViews:[],selected:null,direction:null,compassShown:false,headingStep:5,
   base:'aerial',metroKey:'',reference:null,loadingObj:false,selectionSerial:0,spatialSerial:0,
   pointsData:EMPTY,conesData:EMPTY
@@ -115,6 +114,12 @@ function rebuildLocations() {
   const previous=state.locations;
   state.locations=buildLocations(state.pointRecords,state.cones,state.obj?.loaded || []);
   inheritVisibility(state.locations,previous,state.visibility,state.defaultVisible);
+  const oldIds=new Set([...previous.values()].flatMap(location=>location.layers.map(layer=>layer.id)));
+  for(const location of state.locations.values())for(const layer of location.layers){
+    if(oldIds.has(layer.id))continue;
+    const intent=state.categoryVisibility.get(layer.source+':'+layer.kind)??state.categoryVisibility.get(layer.source+':*');
+    if(intent!==undefined)state.visibility.set(layer.id,intent);
+  }
   refreshPhotoMatches();
   renderTree();applyVisibility();
 }
@@ -142,7 +147,7 @@ function applyVisibility() {
   for(const location of state.locations.values())
     for(const layer of location.layers)if(layer.source==='obj')objects.set(layer.entryId,visible(layer.id));
   state.obj?.applyEntryVisibility(objects);
-  updateMapSources();updateAlignment();updateCheckboxes();updateSelectionToggle();
+  updateMapSources();updateAlignment();updateCheckboxes();
 }
 export function setLayerVisibility(ids,enabled) {
   for(const id of ids)state.visibility.set(id,enabled);
@@ -195,72 +200,69 @@ function checkbox(layers,ariaLabel) {
 }
 function updateCheckboxes() {
   for(const {input,layers} of state.checkboxes)Object.assign(input,checkboxState(layers,state.visibility));
+  for(const {button,layers} of state.groupToggles){
+    const all=layers.length>0&&layers.every(layer=>visible(layer.id));
+    button.disabled=!layers.length;button.textContent=all?'Select none':'Select all';button.setAttribute('aria-pressed',String(all));
+  }
 }
-function updateSelectionToggle() {
-  const layers=[...state.locations.values()].flatMap(location=>location.layers);
-  const allSelected=layers.length>0 && layers.every(layer=>visible(layer.id));
-  const toggle=$('layerSelectionToggle');
-  toggle.disabled=layers.length===0;
-  toggle.textContent=allSelected?'Select none':'Select all';
-  toggle.setAttribute('aria-pressed',String(allSelected));
+function buildMapLayerControls(){
+  const container=$('mapLayerControls');container.replaceChildren();state.groupToggles=[];
+  const all=[...state.locations.values()].flatMap(location=>location.layers);
+  for(const [source,title] of [['map','Shapefile'],['obj','3D Models']]){
+    const group=document.createElement('fieldset');group.append(element('legend','',title));
+    const groupLayers=all.filter(layer=>layer.source===source);
+    const toggle=element('button','text-button');toggle.type='button';toggle.dataset.source=source;
+    state.groupToggles.push({button:toggle,layers:groupLayers});
+    toggle.onclick=()=>{
+      const enabled=!groupLayers.every(layer=>visible(layer.id));
+      state.categoryVisibility.set(source+':*',enabled);
+      for(const kind of ['point','viewshed','frustum','other'])state.categoryVisibility.set(source+':'+kind,enabled);
+      setLayersVisible(groupLayers,state.visibility,enabled);applyVisibility();
+    };
+    group.append(toggle);
+    for(const [kind,label] of [['point','Points'],['viewshed','Viewsheds'],['frustum','Frustums']]){
+      const row=element('label','map-layer-option');
+      const layers=all.filter(layer=>layer.source===source&&layer.kind===kind);
+      const input=checkbox(layers,title+' '+label);
+      input.addEventListener('change',()=>state.categoryVisibility.set(source+':'+kind,input.checked));
+      row.append(input,document.createTextNode(label));group.append(row);
+      if(source==='map'&&kind==='frustum')row.title='Photo/reference frustums derived from shapefile viewpoints';
+    }
+    container.append(group);
+  }
+}
+function showMapLayers(show){
+  $('mapLayerPanel').hidden=!show;$('mapLayersBtn').setAttribute('aria-expanded',String(show));
+}
+async function toggleFullscreen(selector){
+  const target=document.querySelector(selector);
+  try{
+    if(document.fullscreenElement===target)await document.exitFullscreen();
+    else{if(document.fullscreenElement)await document.exitFullscreen();await target.requestFullscreen();}
+  }catch{notify('Fullscreen unavailable.');}
 }
 function element(tag,className,text) {
   const el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;
 }
 function renderTree() {
-  const scrollTop=$('layerTree').scrollTop;
+  const tree=$('layerTree'),scrollTop=tree.scrollTop;
   state.checkboxes=[];const fragment=document.createDocumentFragment();
+  const locations=[...state.locations.values()].filter(location=>location.id!=='__unmatched__');
   const names=new Map();
-  for(const location of state.locations.values())names.set(location.label,(names.get(location.label)||0)+1);
-  for(const location of state.locations.values()) {
+  for(const location of locations)names.set(location.label,(names.get(location.label)||0)+1);
+  for(const location of locations){
     const section=element('div','location');section.dataset.location=location.id;
     section.classList.toggle('selected',state.selected===location.id);
-    const row=element('div','location-row');
-    const expand=element('button','disclosure');expand.type='button';
-    expand.innerHTML='<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>';
-    expand.setAttribute('aria-label','Expand '+location.label+' '+location.id);
-    expand.setAttribute('aria-expanded',String(state.expanded.has(location.id)));
-    const children=element('div','location-children');children.hidden=!state.expanded.has(location.id);
-    expand.onclick=()=>{
-      const open=children.hidden;children.hidden=!open;expand.setAttribute('aria-expanded',String(open));
-      if(open)state.expanded.add(location.id);else state.expanded.delete(location.id);
-    };
-    const parent=checkbox(location.layers,'All layers for '+location.label+' '+location.id);
-    const name=element('button','location-name',location.label);name.type='button';
-    if(names.get(location.label)>1 || location.label!==location.id)name.append(element('small','',location.id==='__unmatched__'?'':location.id));
-    name.onclick=()=>selectView(location.id);
-    row.append(expand,parent,name);section.append(row,children);
-    const kinds=[...LAYER_KINDS];
-    if(location.layers.some(l=>l.kind==='other'))kinds.push('other');
-    for(const kind of kinds) {
-      const layers=location.layers.filter(l=>l.kind===kind);
-      const category=element('div','category');category.dataset.kind=kind;
-      const label=element('label','category-row');
-      label.append(checkbox(layers,labels[kind]+' layers for '+location.id));
-      const text=element('span','category-label');text.append(element('span','layer-symbol '+kind),document.createTextNode(labels[kind]));
-      label.append(text);category.append(label);if(!layers.length)category.classList.add('unavailable');
-      for(const layer of layers) {
-        const leaf=element('label','layer-leaf');leaf.dataset.layerId=layer.id;
-        leaf.append(checkbox([layer],layer.label+' for '+location.id));
-        const caption=element('span','');
-        if(layer.source==='obj')caption.append(element('span','obj-badge','3D OBJ'));
-        caption.append(document.createTextNode(layer.label));leaf.append(caption);category.append(leaf);
-      }
-      children.append(category);
-    }
-    fragment.append(section);
+    const row=element('div','location-row'),name=element('button','location-name',location.label);name.type='button';
+    if(state.selected===location.id)name.setAttribute('aria-current','true');
+    if(names.get(location.label)>1||location.label!==location.id)name.append(element('small','',location.id));
+    name.onclick=()=>selectView(location.id);row.append(name);section.append(row);fragment.append(section);
   }
-  $('layerTree').replaceChildren(fragment);
-  const hasLocations=state.locations.size>0;
-  updateSelectionToggle();
-  const allExpanded=hasLocations && state.expanded.size===state.locations.size;
-  $('expandAll').disabled=!hasLocations;
-  $('expandAll').textContent=allExpanded?'Collapse all':'Expand all';
-  $('expandAll').setAttribute('aria-expanded',String(allExpanded));
+  tree.replaceChildren(fragment);
   $('zoomToSelection').disabled=!state.locations.has(state.selected);
   $('groundObjLayers').disabled=!state.obj?.loaded.length;
   $('groundObjLayers').checked=state.obj?.grounded??true;
-  filterTree();updateCheckboxes();$('layerTree').scrollTop=scrollTop;
+  buildMapLayerControls();filterTree();updateCheckboxes();tree.scrollTop=scrollTop;
 }
 function filterTree() {
   const query=$('locationSearch').value.trim().toLocaleLowerCase();
@@ -283,8 +285,6 @@ export async function selectView(id,{moveMap=true}={}) {
   const focusTree=$('layerTree').contains(document.activeElement);
   const serial=++state.selectionSerial;
   state.selected=id;state.direction=null;state.viewer?.clear();
-  state.expanded.add(id);
-  // Opening a branch never changes its checkbox state.
   renderTree();updateSelectedRow();updateAlignment();
   const selectedRow=[...$('layerTree').children].find(el=>el.dataset.location===id);
   if(selectedRow&&!selectedRow.hidden) {
@@ -419,20 +419,19 @@ function wireUI() {
   $('locationSearch').oninput=filterTree;
   $('zoomToSelection').onclick=zoomToSelection;
   $('groundObjLayers').onchange=e=>state.obj?.setGrounded(e.target.checked);
-  $('expandAll').onclick=()=>{
-    const allExpanded=state.locations.size>0 && state.expanded.size===state.locations.size;
-    state.expanded=allExpanded?new Set():new Set(state.locations.keys());
-    renderTree();
-  };
-  $('layerSelectionToggle').onclick=()=>{
-    const layers=[...state.locations.values()].flatMap(location=>location.layers);
-    const enabled=!layers.every(layer=>visible(layer.id));
-    state.defaultVisible=enabled;
-    for(const location of state.locations.values())setLayersVisible(location.layers,state.visibility,enabled);
-    applyVisibility();
-  };
   for(const btn of document.querySelectorAll('.basemap-btn'))btn.onclick=()=>useBasemap(btn.dataset.base);
   $('fitBtn').onclick=fitLocations;
+  $('mapFullscreen').onclick=()=>toggleFullscreen('.map-pane');
+  $('mapLayersBtn').onclick=()=>showMapLayers($('mapLayerPanel').hidden);
+  document.addEventListener('pointerdown',event=>{if(!event.target.closest('.map-layer-widget'))showMapLayers(false);});
+  document.addEventListener('fullscreenchange',()=>{
+    for(const [id,selector,label] of [['mapFullscreen','.map-pane','map'],['panoFullscreen','.pano-pane','panorama']]){
+      const active=document.fullscreenElement===document.querySelector(selector),button=$(id);
+      button.setAttribute('aria-pressed',String(active));
+      button.title=active?'Exit fullscreen '+label:'Fullscreen '+label;button.setAttribute('aria-label',button.title);
+    }
+    state.map?.resize();state.viewer?.resize();
+  });
   $('pitchBtn').onclick=()=>{const pitch=state.map.getPitch()>10?0:56;state.map.easeTo({pitch,duration:reducedMotion()?0:500});};
   $('spatialInput').onchange=e=>importSpatial(e.target.files);
   $('photosInput').onchange=e=>importPhotos(e.target.files);
@@ -470,8 +469,9 @@ function wireUI() {
     $('photoCompassToggle').setAttribute('aria-label',label);$('photoCompassToggle').title=label;
     updatePhotoCompass();
   };
-  $('panoFullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.querySelector('.pano-pane').requestFullscreen();}catch{notify('Fullscreen unavailable.');}};
+  $('panoFullscreen').onclick=()=>toggleFullscreen('.pano-pane');
   document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&!$('mapLayerPanel').hidden){showMapLayers(false);$('mapLayersBtn').focus();e.preventDefault();return;}
     if(document.querySelector('dialog[open]') || e.target.closest('input,textarea,select,[contenteditable=true]'))return;
     const actions={ArrowLeft:()=>state.viewer.rotate(-6),ArrowRight:()=>state.viewer.rotate(6),ArrowUp:()=>state.viewer.rotate(0,5),ArrowDown:()=>state.viewer.rotate(0,-5),Home:()=>state.viewer.resetView(),'[':()=>stepPhoto(-1),']':()=>stepPhoto(1),q:()=>updateHeading(-state.headingStep),e:()=>updateHeading(state.headingStep)};
     const action=actions[e.key];if(action){e.preventDefault();action();}
