@@ -124,7 +124,7 @@ Preserve the behaviour for multipart polygons, holes, repeated view cones and ov
 
 ## 6. Application architecture and UI responsiveness
 
-Review `js/app.js`, `js/layers.js`, `js/appearance.js`, `index.html` and `css/styles.css`.
+Review `js/app.js`, `js/layers.js`, `js/appearance.js`, `js/tooltips.js`, `index.html` and `css/styles.css`.
 
 Assess:
 
@@ -144,6 +144,10 @@ Assess:
 Exercise the current flat location list, per-location checkboxes and sidebar Select all/none toggle alongside the map's Shapefile and 3D Models category/group controls. Check mixed states, disabled empty groups, filtered-out locations, unmatched models, reimports and latest-applicable visibility intent for later imports. Hiding a location must not change the selected photo. Appearance and visibility must survive basemap/style reloads as intended.
 
 Preserve the current compact interface and single header Import data entry point. Do not propose new metadata panels or extra controls as performance fixes. Check keyboard focus, accessible names/states and fullscreen exits without redesigning the UI.
+
+Verify custom tooltips globally, including dynamically created map-library controls and all five import file/folder controls. Check keyboard focus, accessible descriptions, Escape dismissal and preservation of existing accessible names. Native browser title bubbles and native file-selection hover hints must not reappear. Confirm that file/folder controls remain operable by mouse, keyboard and assistive technology.
+
+Check tooltip placement near every viewport edge, inside dialogs and in fullscreen. Preserve comfortable clearance for a large mouse pointer (currently a 40 px vertical gap for pointer-triggered tips) while keeping tips close to their controls and fully on-screen. Tooltips must update when control labels change and dismiss promptly when their hover/focus is lost, the window loses focus, or their control is hidden or removed. Include repeated open/close cycles and listener/observer cleanup.
 
 ## 7. Import reliability and security
 
@@ -192,7 +196,7 @@ Where executable, benchmark representative operations:
 
 For each scenario, define the action, dataset scale, timing boundaries and cache state before measuring. Separate network/CDN/tile latency from parsing, CPU processing, GPU upload and rendering. Record browser/build, OS, device, available CPU/GPU details, viewport/device-pixel ratio, renderer mode and run count. Use repeated runs and report a median/range; label single runs and unavailable counters explicitly.
 
-Use Performance APIs, traces, long-task/frame diagnostics, renderer counters and memory tools where supported. Record import time, time to usable display, interaction frame times/overlay latency, draw calls/geometry counts and memory trends as relevant. Label GPU-byte estimates and noisy browser memory figures; do not present them as exact measurements. Look for a plateau across repeated cycles rather than assuming immediate garbage collection.
+Use Performance APIs, traces, long-task/frame diagnostics, renderer counters and memory tools where supported. Record import time, time to usable display, interaction frame times/overlay latency, draw calls/geometry counts and memory trends as relevant. For sustained interaction scenarios, report median and 95th-percentile frame times alongside long-task counts, with the sampling method, observation duration and any unavailable metrics stated explicitly. Label GPU-byte estimates and noisy browser memory figures; do not present them as exact measurements. Look for a plateau across repeated cycles rather than assuming immediate garbage collection.
 
 This phase establishes a baseline only. Expected gains remain hypotheses until an implementation is compared under equivalent conditions. Synthetic fixtures must include their generation method and limits; mocks, unavailable real data or a blocked browser run must never be reported as a full browser pass.
 
@@ -200,7 +204,7 @@ This phase establishes a baseline only. Expected gains remain hypotheses until a
 
 The following must remain operational:
 
-- Default equal map/panorama split and current responsive behaviour
+- Current map/panorama split and responsive behaviour
 - Esri World Aerial, Esri World Topography and MetroMap
 - MetroMap API key save and forget controls
 - Shapefile import and spatial reprojection
@@ -211,9 +215,11 @@ The following must remain operational:
 - Legacy combined and separate-category Blender OBJ exports
 - Flat location list with per-location visibility and overall Select all/none, synchronised with the two map layer groups and their Points/Viewsheds/Frustums and Select all/none controls
 - 2D/3D map modes
-- Per-location model grounding, reversible elevations, and global Shapefile/3D Models Line/Fill colour and transparency settings
+- Per-location model grounding and reversible elevations
+- Global Shapefile/3D Models Point/Line/Fill colour and transparency settings, with yellow point defaults and independent values for each target; preserve saved-setting compatibility
 - Location search, selection, zoom and navigation
 - Responsive and fullscreen layouts
+- Custom accessible tooltips, including large-pointer clearance, viewport containment, prompt dismissal and import file/folder controls without native browser hover hints
 - Direct local HTTP hosting, the supplied Windows launcher, and GitHub Pages project-path asset loading
 
 ## 10. Required audit deliverable

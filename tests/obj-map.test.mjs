@@ -13,6 +13,7 @@ async function fixture(){
     add(object){if(object.parent)object.parent.children=object.parent.children.filter(child=>child!==object);this.children.push(object);object.parent=this;}
     attach(object){this.add(object);}
     clear(){this.children=[];}
+    remove(object){this.children=this.children.filter(child=>child!==object);object.parent=null;}
     updateMatrixWorld(){}
     traverse(callback){callback(this);for(const child of this.children)child.traverse(callback);}
   }
@@ -115,6 +116,31 @@ async function fixture(){
 const text='v 281387 6134191 26\nv 281388 6134192 26\nv 281389 6134192 27\nf 1 2 3';
 const entry=(type,id='TorRiv.M')=>({name:'Park_10/'+type+'/Park_10__'+id+'__'+type+'.obj',readText:async()=>text});
 const allEntries=()=>['Points','Viewsheds','Frustums'].map(type=>entry(type));
+
+test('additive model packs keep unrelated geometry and update only their own stable identities',async()=>{
+  const {layer,counters}=await fixture();
+  await layer.load([entry('Points','A')],null,()=>{},{append:true,sourceId:'pack-A',strict:true});
+  const first=layer.loaded[0],firstId=first.id;
+  await layer.load([entry('Points','B')],null,()=>{},{append:true,sourceId:'pack-B',strict:true});
+  const other=layer.loaded.find(item=>item.sourceId==='pack-B');
+  await layer.load([entry('Points','A')],null,()=>{},{append:true,sourceId:'pack-A',strict:true});
+  assert.equal(layer.loaded.length,2);assert.equal(layer.loaded.find(item=>item.sourceId==='pack-A').id,firstId);
+  assert.equal(layer.loaded.find(item=>item.sourceId==='pack-B'),other);
+  assert.equal(first.model.children[0].geometry.disposals,1);assert.equal(other.model.children[0].geometry.disposals,0);
+  const snapshot=[...layer.loaded];
+  await assert.rejects(layer.load([{name:'broken.obj',readText:async()=>{throw Error('broken source');}}],null,()=>{},{append:true,sourceId:'pack-A',strict:true}),/broken source/);
+  assert.deepEqual(layer.loaded,snapshot);
+  await assert.rejects(layer.load([entry('Points','C'),{name:'broken.obj',readText:async()=>{throw Error('broken source');}}],null,()=>{},{append:true,sourceId:'pack-A',strict:true}),/broken source/);
+  assert.deepEqual(layer.loaded,snapshot);
+  layer.dispose();assert.ok(counters.geometries.every(g=>g.disposals===1));
+});
+
+test('staged model imports do not attach to or replace the active map layer',async()=>{
+  const {layer,map}=await fixture();
+  await layer.load(allEntries(),null,()=>{},{append:true,sourceId:'staged',strict:true,attach:false});
+  assert.equal(map.layer,null);assert.equal(layer.loaded.length,3);
+  layer.attach();assert.equal(map.layer,layer.layer);layer.dispose();
+});
 
 test('v1.3.1 combined exports split into location-associated categories with shared grounding',async()=>{
   const {layer,counters}=await fixture();

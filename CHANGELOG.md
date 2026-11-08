@@ -1,5 +1,8 @@
 ## Unreleased
 
+- Add reference-only workspace save/open, remembered file/folder handles, reconnect/change confirmation and staged restoration; retain source packs for additive imports and pack-specific model reference settings.
+- Separate location checkboxes from source/category gates; effective visibility requires both. Preserve independent choices across imports, workspace restores and basemap changes.
+- Add map location labels with photo attachment icons, a Labels toggle, cached sprites and accessible photo-availability descriptions.
 - Restore per-location visibility checkboxes and the sidebar Select all/none toggle without expansion; synchronize with map groups/categories and apply the latest matching intent to new imports.
 - Simplify the sidebar to searchable locations; move visibility to global map controls with independent Shapefile/3D Models select-all toggles and future-import category preferences.
 - Combine basemap, layers, 2D/3D, fit, API key and fullscreen controls in a compact map panel; standardize visible model labels as 3D Models.

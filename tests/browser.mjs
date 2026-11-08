@@ -6,6 +6,7 @@ import {createReadStream,existsSync} from 'node:fs';
 import {readdir,stat,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {checkWorkspace} from './workspace-browser.mjs';
 
 const require=createRequire(import.meta.url);
 const root=path.resolve(fileURLToPath(new URL('../',import.meta.url)));
@@ -55,12 +56,12 @@ const server=createServer(async(req,res)=>{
   }catch{res.writeHead(404).end();}
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-let browser;
+let browser,page;
+const errors=[];
 try {
   browser=await playwright.chromium.launch({headless:true,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
-  const page=await browser.newPage({viewport:{width:1440,height:960}});
+  page=await browser.newPage({viewport:{width:1440,height:960}});
   page.setDefaultTimeout(30000);
-  const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   page.on('console',message=>{if(message.type()==='error'&&!/Failed to load resource/.test(message.text()))errors.push(message.text());});
   await page.addInitScript(()=>{
@@ -110,7 +111,8 @@ try {
     assert.deepEqual(await page.evaluate(()=>{const s=window.vistas.state;return [s.photoIndex.size,s.photoViews.length,window.photoDecodes];}),[52,53,0]);
     await page.getByRole('button',{name:'Done',exact:true}).click();
     await page.locator('.location[data-location="TorRiv.M"] .location-row input').uncheck();
-    assert.equal(await page.locator('#mapLayerControls input').nth(0).evaluate(el=>el.indeterminate),true);
+    assert.equal(await page.locator('#mapLayerControls input').nth(0).evaluate(el=>el.indeterminate),false);
+    assert.equal(await page.locator('#mapLayerControls input').nth(0).isChecked(),true);
     await page.locator('#importBtn').click();
     await page.locator('#referenceInput').setInputFiles(path.resolve(root,'samples/export_reference.json'));
     await page.waitForFunction(()=>document.getElementById('referenceFeedback').textContent==='Loaded');
@@ -120,7 +122,8 @@ try {
     await page.getByRole('button',{name:'Done',exact:true}).click();
     assert.equal(await page.locator('#groundObjLayers').isDisabled(),false);
     assert.equal(await page.locator('#mapLayerControls input:disabled').count(),0);
-    assert.equal(await page.locator('#mapLayerControls input').nth(3).evaluate(el=>el.indeterminate),true);
+    assert.equal(await page.locator('#mapLayerControls input').nth(3).evaluate(el=>el.indeterminate),false);
+    assert.equal(await page.locator('#mapLayerControls input').nth(3).isChecked(),true);
     const alignmentErrors=await page.evaluate(async()=>{
       const THREE=await import('three'),s=window.vistas.state,errors=[];
       const flatten=coords=>typeof coords[0]==='number'?[coords]:coords.flatMap(flatten);
@@ -229,7 +232,8 @@ try {
     assert.equal(await page.evaluate(()=>window.vistas.state.obj.loaded.every(e=>e.model.visible)),true);
     // Sidebar bulk actions include entries outside search and synchronize both groups.
     await page.locator('#layerSelectionToggle').click();
-    assert.equal(await page.locator('#mapLayerControls input:checked').count(),0);
+    assert.equal(await page.locator('#mapLayerControls input:checked').count(),6);
+    assert.equal(await page.evaluate(()=>window.vistas.state.pointsData.features.length),0);
     assert.equal(await page.locator('#layerTree input:checked').count(),0);
     await page.locator('#layerSelectionToggle').click();
     assert.equal(await page.locator('#mapLayerControls input:checked').count(),6);
@@ -258,6 +262,7 @@ try {
     assert.deepEqual(await page.evaluate(()=>{const s=window.vistas.state;return [s.viewer.active,s.viewer.renderer.info.memory.textures,s.map.getSource('vistas-overlap')._data.features.length];}),[false,0,0]);
     await page.locator('#locationSearch').fill('');
     console.log('Real-data checks: 90 locations, 139 cones, 9 OBJ files; 52 photos indexed with zero decodes; texture '+texture.width+'×'+texture.height+'.');
+    await checkWorkspace(page);
   }else console.log('Real-data checks skipped: set VISTAS_SPATIAL_ZIP and VISTAS_PHOTO_FOLDER.');
   for(const [width,height] of [[390,844],[820,1180]]) {
     await page.setViewportSize({width,height});
@@ -271,4 +276,7 @@ try {
   }
   assert.deepEqual(errors,[]);
   console.log('Browser integration passed; screenshots: '+artifacts);
+}catch(error){
+  console.error('Browser diagnostics:',errors,page?await page.evaluate(()=>({state:document.documentElement.dataset.appState,message:document.getElementById('toastRegion')?.textContent})).catch(()=>null):null);
+  throw error;
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}

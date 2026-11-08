@@ -225,26 +225,32 @@ material.opacity=1-value.transparency/100;
     this.anchorEN=null;this.anchorLngLat=null;this.projection=null;this.alignment=null;this.alignmentOrigin=null;
     this.map.triggerRepaint();
   }
-  async load(entries,reference,progress=()=>{}){
+  async load(entries,reference,progress=()=>{},{append=false,sourceId=null,strict=false,attach=true}={}){
     if(reference?.source_crs && reference.source_crs!==CRS)throw new Error('OBJ reference CRS '+reference.source_crs+' is not supported. Expected '+CRS+'.');
-    this.clear();this.reference=reference||null;
+    if(!append)this.clear();else this.loadSerial++;
+    this.reference=reference||null;
+    const initialAnchor={anchorEN:this.anchorEN,anchorLngLat:this.anchorLngLat,projection:this.projection};
+    const batch=[];
+    const discard=()=>{for(const entry of batch)disposeObject(entry.model);if(serial===this.loadSerial){Object.assign(this,initialAnchor);if(this.projection)this._cacheAnchor();}};
     const serial=this.loadSerial,loader=new OBJLoader();
     let vertices=0;const fail=[];
     for(const [i,item] of entries.entries()){
       let model=null,material=null;
       const roots=[],pending=[],oldMaterials=new Set();
       try{
+        const reference=item.reference??this.reference;
+        if(reference?.source_crs&&reference.source_crs!==CRS)throw new Error('Unsupported OBJ reference CRS.');
         progress('Parsing '+(i+1)+'/'+entries.length);
         if(item.bytes>110*1024*1024)throw new Error('Individual OBJ exceeds 110 MB preview limit.');
         const text=await item.readText();
-        if(serial!==this.loadSerial)return {loaded:0,vertices:0,failed:[],cancelled:true};
+        if(serial!==this.loadSerial){discard();return {loaded:0,vertices:0,failed:[],cancelled:true};}
         if(text.length>110*1024*1024)throw new Error('Individual OBJ exceeds 110 MB preview limit.');
         const first=parseFirstObjVertex(text);
-        const frame=getObjCoordinateFrame(first,this.reference);
-        const [e,n]=projectedVertex(first,frame,this.reference);
+        const frame=getObjCoordinateFrame(first,reference);
+        const [e,n]=projectedVertex(first,frame,reference);
         const anchor=this.anchorEN||[e,n];
         const projection=this.projection||createObjProjection(anchor);
-        const transformed=rebaseObjForMap(text,frame,this.reference,projection.project);
+        const transformed=rebaseObjForMap(text,frame,reference,projection.project);
         model=loader.parse(transformed.text);roots.push(model);
         const parts=modelParts(model,item.name);
         for(const part of parts)if(part.model!==model)roots.push(part.model);
@@ -287,7 +293,7 @@ material.opacity=1-value.transparency/100;
               mesh.add(highlight);highlights.push(highlight);
             }
           }
-          const entry={id:part.id,name:part.name,sourceName:item.name,type,viewId:locationId(item.name),model,material,highlights,
+          const entry={id:sourceId?sourceId+'/'+part.id:part.id,sourceId,name:part.name,sourceName:item.name,type,viewId:locationId(item.name),model,material,highlights,
             vertices:renderables.reduce((count,child)=>count+(child.geometry.attributes?.position?.count||0),0)||transformed.vertexCount,
             sourceMinHeight,sourcePositionY:model.position.y,groundOffset:0};
           this._applyAppearance(entry);pending.push(entry);
@@ -295,7 +301,7 @@ material.opacity=1-value.transparency/100;
         if(!this.anchorEN){
           this.anchorEN=anchor;this.projection=projection;this.anchorLngLat=projection.anchorLngLat;this._cacheAnchor();
         }
-        for(const entry of pending){this.loaded.push(entry);this.group.add(entry.model);}
+        batch.push(...pending);
         vertices+=transformed.vertexCount;
       }catch(error){
         for(const old of oldMaterials)old.dispose();
@@ -305,11 +311,16 @@ material.opacity=1-value.transparency/100;
       }
       // Yield between files so location controls and cancellation remain usable.
       if(i%4===3)await new Promise(resolve=>setTimeout(resolve,0));
-      if(serial!==this.loadSerial)return {loaded:0,vertices:0,failed:[],cancelled:true};
+      if(serial!==this.loadSerial){discard();return {loaded:0,vertices:0,failed:[],cancelled:true};}
     }
-    if(!this.loaded.length)throw new Error('No OBJ geometry loaded. '+fail.slice(0,2).join('; '));
+    if(!batch.length||(strict&&fail.length)){discard();throw new Error('No OBJ geometry loaded. '+fail.slice(0,2).join('; '));}
+    if(append&&sourceId){
+      for(const entry of this.loaded.filter(entry=>entry.sourceId===sourceId)){this.group.remove(entry.model);disposeObject(entry.model);this.entryVisibility.delete(entry.id);}
+      this.loaded=this.loaded.filter(entry=>entry.sourceId!==sourceId);
+    }
+    for(const entry of batch){this.loaded.push(entry);this.group.add(entry.model);}
     this._applyGrounding();
-    this._updateVisibility();this.attach();this.map.triggerRepaint();
+    this._updateVisibility();if(attach)this.attach();this.map.triggerRepaint();
     if(fail.length)this.notify(fail.length+' OBJ file(s) skipped. '+fail[0],true);
     return {loaded:this.loaded.length,vertices,failed:fail};
   }

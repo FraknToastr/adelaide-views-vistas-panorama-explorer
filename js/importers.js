@@ -14,7 +14,7 @@ export async function readShapefiles(files) {
   // Pair loose components by their complete stem, never by extension alone.
   const groups=new Map();
   for (const file of list) {
-    const match=file.name.match(/^(.*)\.(shp|dbf|prj|cpg)$/i);
+    const match=(file.path||file.webkitRelativePath||file.name).match(/^(.*)\.(shp|dbf|prj|cpg)$/i);
     if (!match) continue;
     const stem=match[1].toLowerCase();
     if (!groups.has(stem)) groups.set(stem,{});
@@ -35,21 +35,24 @@ export async function readObjEntries(files) {
   if (!files?.length) throw new Error('Choose OBJ files or a ZIP archive.');
   const records=[];
   let reference=null;
+  const archives=Array.from(files).filter(file=>/\.zip$/i.test(file.name));
   for (const file of Array.from(files)) {
     if (/\.zip$/i.test(file.name)) {
       if (!window.JSZip) throw new Error('ZIP library did not load.');
       const zip=await window.JSZip.loadAsync(file);
+      const firstRecord=records.length;let archiveReference=null;
       for (const entry of Object.values(zip.files)) {
         if (entry.dir || !/\.(obj|json)$/i.test(entry.name)) continue;
         if (entry.name.split('/').some(p=>p==='__MACOSX')) continue;
         if (/export_reference\.json$/i.test(entry.name)) {
-          try {reference=JSON.parse(await entry.async('string'));} catch { /* non-blocking */ }
+          try {archiveReference=JSON.parse(await entry.async('string'));reference=archiveReference;} catch { /* non-blocking */ }
         } else if (/\.obj$/i.test(entry.name)) {
-          records.push({name:entry.name, readText:()=>entry.async('string'), bytes:entry._data?.uncompressedSize || 0});
+          records.push({name:archives.length>1?file.name+'/'+entry.name:entry.name, readText:()=>entry.async('string'), bytes:entry._data?.uncompressedSize || 0});
         }
       }
+      if(archiveReference)for(const record of records.slice(firstRecord))record.reference=archiveReference;
     } else if (/\.obj$/i.test(file.name)) {
-      records.push({name:file.webkitRelativePath||file.name,readText:()=>file.text(),bytes:file.size});
+      records.push({name:file.path||file.webkitRelativePath||file.name,readText:()=>file.text(),bytes:file.size});
     } else if (/export_reference\.json$/i.test(file.name)) {
       reference=JSON.parse(await file.text());
     }

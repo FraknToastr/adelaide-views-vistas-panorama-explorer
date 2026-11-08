@@ -6,7 +6,11 @@ import {readShapefiles,readObjEntries,collectPanoramaFiles} from './importers.js
 import {PanoramaViewer} from './panorama.js';
 import {ObjMapLayer} from './obj-map.js';
 import {defaultAppearance,loadAppearance,saveAppearance,applyShapeAppearance} from './appearance.js';
-import {buildLocations,checkboxState,setLayersVisible,inheritVisibility,createPhotoIndex,VisibilityIntents} from './layers.js';
+import {buildLocations,createPhotoIndex} from './layers.js';
+import {VisibilityGates,KINDS} from './visibility.js';
+import {SourceRegistry,newId,createWorkspace,validateWorkspace,validateReference,filePath} from './workspace.js';
+import {installWorkspaceUI} from './workspace-ui.js';
+import {MapLabels} from './map-labels.js';
 import {prepareViewshed,clipViewshed,cameraSector,sourceSectors} from './alignment.js';
 
 const $=id=>document.getElementById(id);
@@ -50,8 +54,10 @@ slider.oninput=()=>{appearance[group][active].transparency=Number(slider.value);
 }
 export const state={
   map:null,obj:null,viewer:null,pointRecords:[],cones:[],locations:new Map(),
-  visibility:new Map(),defaultVisible:true,visibilityIntents:new VisibilityIntents(),checkboxes:[],groupToggles:[],
-  photoIndex:createPhotoIndex(),photoViews:[],selected:null,direction:null,compassShown:false,headingStep:5,
+  visibility:new Map(),gates:new VisibilityGates(),checkboxes:[],groupToggles:[],
+  sources:new SourceRegistry(),workspaceId:newId(),workspaceBusy:false,headings:new Map(),referenceId:null,pendingReferenceId:null,
+  labelsEnabled:true,labels:null,workspaceRestored:false,
+  photoIndex:createPhotoIndex(),photoViews:[],selected:null,pendingSelected:null,direction:null,compassShown:false,headingStep:5,
   base:'aerial',metroKey:'',reference:null,loadingObj:false,selectionSerial:0,spatialSerial:0,
   pointsData:EMPTY,conesData:EMPTY
 };
@@ -85,7 +91,7 @@ function setSource(id,data){state.map?.getSource(id)?.setData(data);}
 function addMapLayers() {
   // style.load means the style graph is ready; raster tiles may still be loading.
   const map=state.map;if(!map)return;
-  for(const id of ['points','cones','heading','frustum','reference','overlap'])
+  for(const id of ['points','cones','heading','frustum','reference','overlap','labels'])
     if(!map.getSource('vistas-'+id))map.addSource('vistas-'+id,{type:'geojson',data:EMPTY});
   const layers=[
     {id:'vistas-cones-fill',type:'fill',source:'vistas-cones',paint:{'fill-color':'#ed0c73','fill-opacity':.09}},
@@ -101,6 +107,7 @@ function addMapLayers() {
     {id:'vistas-points',type:'circle',source:'vistas-points',paint:{'circle-radius':['interpolate',['linear'],['zoom'],12,5.2,17,8.1,20,11],'circle-color':'#ffda26','circle-stroke-color':'#182d3b','circle-stroke-width':2.25}}
   ];
   for(const layer of layers)if(!map.getLayer(layer.id))map.addLayer(layer);
+  if(!map.getLayer('vistas-labels'))map.addLayer({id:'vistas-labels',type:'symbol',source:'vistas-labels',layout:{'icon-image':['get','image'],'icon-anchor':'left','icon-offset':[12,0],'icon-allow-overlap':false}});
   updateAppearance();state.obj?.attach();updateMapSources();updateAlignment();
 }
 function refreshPhotoMatches() {
@@ -112,9 +119,7 @@ function refreshPhotoMatches() {
   }
 }
 function rebuildLocations() {
-  const previous=state.locations;
   state.locations=buildLocations(state.pointRecords,state.cones,state.obj?.loaded || []);
-  inheritVisibility(state.locations,previous,state.visibility,state.defaultVisible,state.visibilityIntents);
   refreshPhotoMatches();
   renderTree();applyVisibility();
 }
@@ -131,6 +136,14 @@ function updateMapSources() {
   state.conesData={type:'FeatureCollection',features:cones};
   setSource('vistas-points',state.pointsData);setSource('vistas-cones',state.conesData);
   if(state.map.getLayer('vistas-selected'))state.map.setFilter('vistas-selected',['==',['get','VIEW_ID'],state.selected || '___none___']);
+  const labels=[];
+  for(const location of state.locations.values()){
+    const modelPoint=location.objects.find(entry=>entry.type==='Points'&&visible('obj:'+entry.id));
+    let coordinates=location.point?.geometry.coordinates.slice(0,2);
+    if(!coordinates&&modelPoint&&state.obj.projection){const center=new THREE.Box3().setFromObject(modelPoint.model).getCenter(new THREE.Vector3());coordinates=state.obj.projection.toLngLat(center.x,center.z);}
+    if(coordinates&&(visible('point:'+location.id)&&location.point||modelPoint))labels.push({id:location.id,name:location.label,photo:!!location.photo,coordinates});
+  }
+  state.labels?.update(labels,state.labelsEnabled);
 }
 function visible(id){return state.visibility.get(id)!==false;}
 function triangulate(contour,holes) {
@@ -138,6 +151,8 @@ function triangulate(contour,holes) {
   return THREE.ShapeUtils.triangulateShape(vectors(contour),holes.map(vectors));
 }
 function applyVisibility() {
+  state.visibility.clear();
+  for(const location of state.locations.values())for(const layer of location.layers)state.visibility.set(layer.id,state.gates.visible(location.id,layer));
   const objects=new Map();
   for(const location of state.locations.values())
     for(const layer of location.layers)if(layer.source==='obj')objects.set(layer.entryId,visible(layer.id));
@@ -145,7 +160,7 @@ function applyVisibility() {
   updateMapSources();updateAlignment();updateCheckboxes();
 }
 export function setLayerVisibility(ids,enabled) {
-  for(const id of ids)state.visibility.set(id,enabled);
+  for(const location of state.locations.values())for(const layer of location.layers)if(ids.includes(layer.id))state.gates.setCategory(layer.source,layer.kind,enabled);
   applyVisibility();
 }
 function updateAlignment() {
@@ -189,40 +204,35 @@ function updatePhotoCompass() {
 }
 function checkbox(layers,ariaLabel,scope) {
   const input=document.createElement('input');input.type='checkbox';input.setAttribute('aria-label',ariaLabel);
-  state.checkboxes.push({input,layers});
-  input.addEventListener('change',()=>{if(scope)state.visibilityIntents.set(scope,input.checked);setLayersVisible(layers,state.visibility,input.checked);applyVisibility();});
+  state.checkboxes.push({input,layers,scope});
+  input.addEventListener('change',()=>{
+    if(scope.locationId)state.gates.setLocation(scope.locationId,input.checked);
+    else state.gates.setCategory(scope.source,scope.kind,input.checked);
+    applyVisibility();
+  });
   return input;
 }
 function updateCheckboxes() {
-  for(const {input,layers} of state.checkboxes)Object.assign(input,checkboxState(layers,state.visibility));
-  for(const {button,layers} of state.groupToggles){
-    const all=layers.length>0&&layers.every(layer=>visible(layer.id));
+  for(const {input,layers,scope} of state.checkboxes)Object.assign(input,{checked:scope.locationId?state.gates.location(scope.locationId):state.gates.category(scope.source,scope.kind),indeterminate:false,disabled:!layers.length});
+  for(const {button,source,layers} of state.groupToggles){
+    const all=KINDS.filter(kind=>kind!=='other'||layers.some(layer=>layer.kind==='other')).every(kind=>state.gates.category(source,kind));
     button.disabled=!layers.length;button.textContent=all?'Select none':'Select all';button.setAttribute('aria-pressed',String(all));
   }
-  const all=[...state.locations.values()].flatMap(location=>location.layers);
-  const selected=all.length>0&&all.every(layer=>visible(layer.id));
-  $('layerSelectionToggle').disabled=!all.length;
-  $('layerSelectionToggle').textContent=selected?'Select none':'Select all';
-  $('layerSelectionToggle').setAttribute('aria-pressed',String(selected));
+  const locations=[...state.locations.values()],all=locations.length>0&&locations.every(location=>state.gates.location(location.id));
+  $('layerSelectionToggle').disabled=!locations.length;$('layerSelectionToggle').textContent=all?'Select none':'Select all';$('layerSelectionToggle').setAttribute('aria-pressed',String(all));
 }
 function buildMapLayerControls(){
   const container=$('mapLayerControls');container.replaceChildren();state.groupToggles=[];
   const all=[...state.locations.values()].flatMap(location=>location.layers);
   for(const [source,title] of [['map','Shapefile'],['obj','3D Models']]){
     const group=document.createElement('fieldset');group.append(element('legend','',title));
-    const groupLayers=all.filter(layer=>layer.source===source);
-    const toggle=element('button','text-button');toggle.type='button';toggle.dataset.source=source;
-    state.groupToggles.push({button:toggle,layers:groupLayers});
-    toggle.onclick=()=>{
-      const enabled=!groupLayers.every(layer=>visible(layer.id));
-      state.visibilityIntents.set({source},enabled);
-      setLayersVisible(groupLayers,state.visibility,enabled);applyVisibility();
-    };
+    const groupLayers=all.filter(layer=>layer.source===source),toggle=element('button','text-button');toggle.type='button';toggle.dataset.source=source;
+    state.groupToggles.push({button:toggle,source,layers:groupLayers});
+    toggle.onclick=()=>{const kinds=KINDS.filter(kind=>kind!=='other'||groupLayers.some(layer=>layer.kind==='other'));state.gates.setGroup(source,!kinds.every(kind=>state.gates.category(source,kind)));applyVisibility();};
     group.append(toggle);
     for(const [kind,label] of [['point','Points'],['viewshed','Viewsheds'],['frustum','Frustums']]){
-      const row=element('label','map-layer-option');
-      const layers=all.filter(layer=>layer.source===source&&layer.kind===kind);
-      const input=checkbox(layers,title+' '+label,{source,kind});
+      const row=element('label','map-layer-option'),layers=all.filter(layer=>layer.source===source&&layer.kind===kind);
+      const input=checkbox(layers,title+' '+label,{source,kind});input.dataset.source=source;input.dataset.kind=kind;
       row.append(input,document.createTextNode(label));group.append(row);
       if(source==='map'&&kind==='frustum')row.dataset.tooltip='Photo/reference frustums derived from shapefile viewpoints';
     }
@@ -245,7 +255,7 @@ function element(tag,className,text) {
 function renderTree() {
   const tree=$('layerTree'),scrollTop=tree.scrollTop;
   state.checkboxes=[];const fragment=document.createDocumentFragment();
-  const locations=[...state.locations.values()].filter(location=>location.id!=='__unmatched__');
+  const locations=[...state.locations.values()];
   const names=new Map();
   for(const location of locations)names.set(location.label,(names.get(location.label)||0)+1);
   for(const location of locations){
@@ -254,7 +264,8 @@ function renderTree() {
     const row=element('div','location-row'),name=element('button','location-name',location.label);name.type='button';
     if(state.selected===location.id)name.setAttribute('aria-current','true');
     if(names.get(location.label)>1||location.label!==location.id)name.append(element('small','',location.id));
-    const input=checkbox(location.layers,'All layers for '+location.label+' '+location.id,{locationId:location.id});
+    name.setAttribute('aria-label',location.label+(location.photo?', photo available':', no matched photo'));
+    const input=checkbox(location.layers,'Location '+location.label+' '+location.id,{locationId:location.id});
     name.onclick=()=>selectView(location.id);row.append(input,name);section.append(row);fragment.append(section);
   }
   tree.replaceChildren(fragment);
@@ -277,13 +288,13 @@ function showSidebar(show) {
   $('workspace').classList.toggle('sidebar-closed',!show);
   $('layersBtn').setAttribute('aria-expanded',String(show));
 }
-function storedHeading(id){try{return Number(localStorage.getItem('uos.vistas.heading.'+id)) || 0;}catch{return 0;}}
-function saveHeading(id,heading){try{localStorage.setItem('uos.vistas.heading.'+id,String(heading));}catch{/* optional */}}
+function storedHeading(id){if(state.headings.has(id))return state.headings.get(id);try{return Number(localStorage.getItem(state.workspaceRestored?'uos.vistas.heading.'+state.workspaceId+'.'+id:'uos.vistas.heading.'+id)) || 0;}catch{return 0;}}
+function saveHeading(id,heading){state.headings.set(id,heading);try{localStorage.setItem(state.workspaceRestored?'uos.vistas.heading.'+state.workspaceId+'.'+id:'uos.vistas.heading.'+id,String(heading));}catch{/* optional */}}
 export async function selectView(id,{moveMap=true}={}) {
   const location=state.locations.get(id);if(!location)return;
   const focusTree=$('layerTree').contains(document.activeElement);
   const serial=++state.selectionSerial;
-  state.selected=id;state.direction=null;state.viewer?.clear();
+  state.selected=id;state.pendingSelected=null;state.direction=null;state.viewer?.clear();
   renderTree();updateSelectedRow();updateAlignment();
   const selectedRow=[...$('layerTree').children].find(el=>el.dataset.location===id);
   if(selectedRow&&!selectedRow.hidden) {
@@ -360,42 +371,119 @@ function fitLocations() {
   } else if(state.obj?.anchorLngLat)state.obj.focus();
   else state.map.easeTo({center:DEFAULT_CENTER,zoom:14.3,duration});
 }
-async function importSpatial(files) {
-  if(!files?.length)return;
-  const serial=++state.spatialSerial;feedback('spatialFeedback','Loading…');
-  try {
+async function preparePack(role,files,descriptor,reference=null){
+  if(!files.length)throw new Error('No supported files were selected.');
+  const pack={...descriptor,role,files};
+  if(role==='spatial'){
     const collection=await readShapefiles(files);
-    if(serial!==state.spatialSerial)return;
-    const points=collection.features.filter(f=>f.geometry?.type==='Point' && viewId(f.properties));
-    const cones=collection.features.filter(f=>/^(Multi)?Polygon$/.test(f.geometry?.type) && viewId(f.properties));
-    if(!points.length&&!cones.length)throw new Error('No named viewpoints or view cones found.');
-    ++state.selectionSerial;state.viewer.clear();state.direction=null;state.selected=null;
-    if(points.length)state.pointRecords=points;
-    if(cones.length)state.cones=cones;
-    rebuildLocations();fitLocations();
-    $('panoEmpty').classList.remove('hidden');$('panoHeader').classList.add('hidden');$('panoFooter').classList.add('hidden');$('emptyMessage').textContent='Panorama';
-    feedback('spatialFeedback','Loaded');
-  } catch(error){if(serial===state.spatialSerial){feedback('spatialFeedback',error.message,true);notify(error.message);}}
+    pack.data={points:collection.features.filter(f=>f.geometry?.type==='Point'&&viewId(f.properties)),cones:collection.features.filter(f=>/^(Multi)?Polygon$/.test(f.geometry?.type)&&viewId(f.properties))};
+    if(!pack.data.points.length&&!pack.data.cones.length)throw new Error('No named viewpoints or view cones found.');
+  }else if(role==='photos')pack.data=collectPanoramaFiles(files);
+  else if(role==='reference')pack.data=validateReference(JSON.parse(await files[0].text()));
+  else{
+    const parsed=await readObjEntries(files);pack.data=parsed.entries;pack.reference=parsed.reference?validateReference(parsed.reference):descriptor.referenceConfig||reference;
+    if(parsed.reference)pack.referenceId=null;
+  }
+  return pack;
 }
-function importPhotos(files) {
-  if(!files?.length)return;
-  // webkitdirectory supplies recursive File handles. Index paths only: no reads, URLs or decode here.
-  const photos=collectPanoramaFiles(files);
-  state.photoIndex=createPhotoIndex(photos);refreshPhotoMatches();updateMapSources();
-  feedback('photosFeedback',photos.length?'Ready':'No photos found',!photos.length);
-  if(state.selected)selectView(state.selected,{moveMap:false});
+function updateSourceData(){
+  const sources=state.sources;
+  state.pointRecords=sources.values('spatial').flatMap(pack=>pack.data?.points||[]);
+  state.cones=sources.values('spatial').flatMap(pack=>pack.data?.cones||[]);
+  state.photoIndex=createPhotoIndex(sources.values('photos').flatMap(pack=>pack.data||[]));
 }
-async function importObjFiles(files) {
-  if(!files?.length||state.loadingObj)return;
-  state.loadingObj=true;feedback('objFeedback','Loading…');
-  try {
-    const parsed=await readObjEntries(files),reference=parsed.reference || state.reference;
-    if(parsed.reference){state.reference=parsed.reference;feedback('referenceFeedback','Loaded');}
-    const summary=await state.obj.load(parsed.entries,reference);
-    rebuildLocations();feedback('objFeedback',summary.failed.length?'Loaded; some files skipped':'Loaded',!!summary.failed.length);
-    if(!state.pointRecords.length)state.obj.focus();
-  }catch(error){rebuildLocations();feedback('objFeedback',error.message,true);notify(error.message);}
-  finally{state.loadingObj=false;}
+function checkModelBudget(registry,pack){
+  const bytes=registry.values('models').filter(p=>p.id!==pack.id).flatMap(p=>p.data||[]).concat(pack.data||[]).reduce((sum,item)=>sum+item.bytes,0);
+  if(bytes>500*1024*1024)throw new Error('Combined OBJ inputs exceed the 500 MB preview limit.');
+}
+export async function importPack(role,files,access=null,options={}){
+  const feedbackId={spatial:'spatialFeedback',photos:'photosFeedback',models:'objFeedback',reference:'referenceFeedback'}[role];
+  feedback(feedbackId,'Loading…');
+  try{
+    const id=options.sourceId||await state.sources.identify(role,files,access),directory=!!access?.directory||files.some(file=>filePath(file).includes('/'));
+    const descriptor={id,mode:directory?'directory':'files',root:directory?filePath(files[0]).split('/')[0]:'',name:access?.directory?.name||(directory?filePath(files[0]).split('/')[0]:files.map(file=>file.name).join(', ')),access,referenceId:role==='models'?state.referenceId:null};
+    const pack=await preparePack(role,files,descriptor,state.reference);
+    if(role==='models'){checkModelBudget(state.sources,pack);state.loadingObj=true;try{await state.obj.load(pack.data,pack.reference,()=>{},{append:true,sourceId:pack.id,strict:true});}finally{state.loadingObj=false;}}
+    const previousPhoto=state.locations.get(state.selected)?.photo;
+    state.sources.put(pack);
+    if(role==='reference'){state.reference=pack.data;state.referenceId=pack.id;state.pendingReferenceId=null;}
+    updateSourceData();rebuildLocations();
+    if(role==='spatial'&&!state.selected)fitLocations();
+    if(role==='models'&&state.sources.values('models').length===1&&!state.pointRecords.length&&!state.selected)state.obj.focus();
+    feedback(feedbackId,role==='photos'?'Ready':'Loaded');
+    if(state.selected&&!state.locations.has(state.selected)){
+      ++state.selectionSerial;state.selected=null;state.direction=null;state.viewer.clear();
+      $('panoEmpty').classList.remove('hidden');$('panoHeader').classList.add('hidden');$('panoFooter').classList.add('hidden');$('emptyMessage').textContent='Panorama';
+      updateMapSources();updateAlignment();
+    }else if(state.selected){
+      $('panoTitle').textContent=state.locations.get(state.selected).label;
+      if(state.locations.get(state.selected).photo!==previousPhoto)await selectView(state.selected,{moveMap:false});
+    }
+    return pack;
+  }catch(error){feedback(feedbackId,error.message,true);throw error;}
+}
+export function workspaceSnapshot(){
+  const map=state.map,viewer=state.viewer;
+  return createWorkspace(state.workspaceId,state.sources.sources(),{
+    visibility:state.gates.snapshot(),labels:state.labelsEnabled,grounded:state.obj.grounded,appearance:structuredClone(appearance),
+    headings:Object.fromEntries(new Map([...state.headings,...[...state.locations.keys()].map(id=>[id,storedHeading(id)])])),
+    selected:state.pendingSelected||state.selected,base:state.base,activeReference:state.pendingReferenceId||state.referenceId,compass:state.compassShown,headingStep:state.headingStep,
+    map:{center:map.getCenter().toArray(),zoom:map.getZoom(),pitch:map.getPitch(),bearing:map.getBearing()},
+    panorama:{yaw:viewer.yaw,pitch:viewer.pitch,fov:viewer.fov}
+  });
+}
+export async function restoreWorkspace(workspace,resolved){
+  workspace=validateWorkspace(workspace);
+  const registry=new SourceRegistry(),prepared=new Map(),settings=workspace.state;
+  const staged=new ObjMapLayer(state.map);
+  staged.setGrounded(settings.grounded!==false);staged.setAppearance((settings.appearance||appearance).obj);
+  try{
+    for(const source of workspace.sources.filter(s=>s.role==='reference')){
+      const found=resolved.get(source.id);if(found)prepared.set(source.id,await preparePack(source.role,found.files,{...source,access:found.access}));
+    }
+    for(const source of workspace.sources.filter(s=>s.role!=='reference')){
+      const found=resolved.get(source.id);if(!found)continue;
+      if(source.referenceId&&!prepared.has(source.referenceId)&&!source.referenceConfig)continue;
+      const pack=await preparePack(source.role,found.files,{...source,access:found.access},prepared.get(source.referenceId)?.data||null);
+      if(source.role==='models'){checkModelBudget(registry,pack);await staged.load(pack.data,pack.reference,()=>{},{append:true,sourceId:source.id,strict:true,attach:false});}
+      prepared.set(source.id,pack);registry.put(pack);
+    }
+    for(const source of workspace.sources)registry.put(prepared.get(source.id)||{...source,files:[],manifest:source,unavailable:true});
+  }catch(error){staged.clear();throw error;}
+  ++state.selectionSerial;state.viewer.clear();state.direction=null;state.selected=null;state.obj.dispose();
+  state.obj=staged;state.sources=registry;state.workspaceId=workspace.id;state.workspaceRestored=true;state.gates=new VisibilityGates(settings.visibility);
+  state.headings=new Map(Object.entries(settings.headings||{}));
+  state.pendingSelected=settings.selected||null;
+  const reference=prepared.get(settings.activeReference)||[...prepared.values()].filter(pack=>pack.role==='reference').at(-1);
+  state.reference=reference?.data||null;state.referenceId=reference?.id||null;
+  state.pendingReferenceId=settings.activeReference&&!prepared.has(settings.activeReference)?settings.activeReference:null;
+  if(settings.appearance)appearance=structuredClone(settings.appearance);
+  state.labelsEnabled=settings.labels!==false;$('mapLabelsBtn').setAttribute('aria-pressed',String(state.labelsEnabled));
+  state.compassShown=!!settings.compass;$('photoCompassToggle').setAttribute('aria-pressed',String(state.compassShown));
+  const compassLabel=(state.compassShown?'Hide':'Show')+' centre compass line';$('photoCompassToggle').dataset.tooltip=compassLabel;$('photoCompassToggle').setAttribute('aria-label',compassLabel);
+  state.headingStep=settings.headingStep===1?1:5;syncHeadingStep();
+  updateSourceData();rebuildLocations();buildAppearanceControls();updateAppearance();staged.attach();
+  for(const [role,id] of [['spatial','spatialFeedback'],['photos','photosFeedback'],['models','objFeedback'],['reference','referenceFeedback']]){
+    const packs=registry.values(role),available=packs.filter(pack=>!pack.unavailable).length;
+    feedback(id,available?(role==='photos'?'Ready':'Loaded')+(available>1?' ('+available+' packs)':''):packs.length?'Reconnect required':'Not loaded');
+  }
+  const base=settings.base==='metro'&&!state.metroKey?'aerial':settings.base||'aerial';
+  if(settings.base==='metro'&&!state.metroKey)notify('Workspace loaded with Aerial. Enter your MetroMap key to use MetroMap.',false);
+  if(base!==state.base)useBasemap(base);
+  if(settings.map)state.map.jumpTo(settings.map);
+  $('panoEmpty').classList.remove('hidden');$('panoHeader').classList.add('hidden');$('panoFooter').classList.add('hidden');$('emptyMessage').textContent='Panorama';
+  if(settings.selected&&state.locations.has(settings.selected))await selectView(settings.selected,{moveMap:false});
+  if(settings.panorama&&state.viewer.active){Object.assign(state.viewer,settings.panorama);state.viewer.render();}
+  if(registry.values().some(pack=>pack.unavailable))notify('Some workspace packs are unavailable. Reopen the workspace to reconnect them.',false);
+}
+function syncHeadingStep(){
+  const step=state.headingStep,next=step===5?1:5,unit=step===1?'degree':'degrees';
+  $('headingStepToggle').textContent=step+'°';
+  $('headingStepToggle').dataset.tooltip='Heading step: '+step+'°. Switch to '+next+'°.';
+  $('headingStepToggle').setAttribute('aria-label','Heading step: '+step+' '+unit+'. Switch to '+next+' '+(next===1?'degree':'degrees')+'.');
+  for(const [id,sign,word] of [['headingMinus','−','minus'],['headingPlus','+','plus']]){
+    $(id).dataset.tooltip='Calibrate heading '+sign+step+'°';$(id).setAttribute('aria-label','Calibrate heading '+word+' '+step+' '+unit);
+  }
 }
 function setMetroKey() {
   const key=$('metroKeyInput').value.trim();
@@ -418,10 +506,8 @@ function wireUI() {
   $('locationSearch').oninput=filterTree;
   $('zoomToSelection').onclick=zoomToSelection;
   $('layerSelectionToggle').onclick=()=>{
-    const layers=[...state.locations.values()].flatMap(location=>location.layers);
-    const enabled=!layers.every(layer=>visible(layer.id));
-    state.defaultVisible=enabled;state.visibilityIntents.set({},enabled);
-    setLayersVisible(layers,state.visibility,enabled);applyVisibility();
+    const locations=[...state.locations.values()],enabled=!locations.every(location=>state.gates.location(location.id));
+    for(const location of locations)state.gates.setLocation(location.id,enabled);applyVisibility();
   };
   $('groundObjLayers').onchange=e=>state.obj?.setGrounded(e.target.checked);
   for(const btn of document.querySelectorAll('.basemap-btn'))btn.onclick=()=>useBasemap(btn.dataset.base);
@@ -438,34 +524,13 @@ function wireUI() {
     state.map?.resize();state.viewer?.resize();
   });
   $('pitchBtn').onclick=()=>{const pitch=state.map.getPitch()>10?0:56;state.map.easeTo({pitch,duration:reducedMotion()?0:500});};
-  $('spatialInput').onchange=e=>importSpatial(e.target.files);
-  $('photosInput').onchange=e=>importPhotos(e.target.files);
-  $('objInput').onchange=e=>importObjFiles(e.target.files);
-  $('objFolderInput').onchange=e=>importObjFiles(e.target.files);
-  $('referenceInput').onchange=async e=>{
-    const file=e.target.files?.[0];if(!file)return;
-    try {
-      const reference=JSON.parse(await file.text());
-      if(!reference || Array.isArray(reference) || typeof reference!=='object')throw new Error('Invalid reference JSON.');
-      if(reference.source_crs && reference.source_crs!=='EPSG:7854')throw new Error('Unsupported reference CRS.');
-      state.reference=reference;feedback('referenceFeedback','Loaded');
-    }catch(error){feedback('referenceFeedback',error.message,true);notify(error.message);}
-  };
+  $('mapLabelsBtn').onclick=()=>{state.labelsEnabled=!state.labelsEnabled;$('mapLabelsBtn').setAttribute('aria-pressed',String(state.labelsEnabled));updateMapSources();};
+  state.workspaceUI=installWorkspaceUI({registry:()=>state.sources,snapshot:workspaceSnapshot,restore:restoreWorkspace,importFiles:importPack,notify,setBusy:busy=>{state.workspaceBusy=busy;}});
   $('applyMetro').onclick=setMetroKey;
   $('forgetMetro').onclick=()=>{try{localStorage.removeItem(METRO_STORAGE);}catch{/* optional */}state.metroKey='';$('metroKeyInput').value='';$('rememberMetro').checked=false;feedback('metroFeedback','');if(state.base==='metro')useBasemap('aerial');};
   $('prevView').onclick=()=>stepPhoto(-1);$('nextView').onclick=()=>stepPhoto(1);
   $('headingMinus').onclick=()=>updateHeading(-state.headingStep);$('headingPlus').onclick=()=>updateHeading(state.headingStep);
-  $('headingStepToggle').onclick=()=>{
-    state.headingStep=state.headingStep===5?1:5;
-    const step=state.headingStep,next=step===5?1:5,unit=step===1?'degree':'degrees';
-    $('headingStepToggle').textContent=step+'°';
-    $('headingStepToggle').dataset.tooltip='Heading step: '+step+'°. Switch to '+next+'°.';
-    $('headingStepToggle').setAttribute('aria-label','Heading step: '+step+' '+unit+'. Switch to '+next+' '+(next===1?'degree':'degrees')+'.');
-    for(const [id,sign,word] of [['headingMinus','−','minus'],['headingPlus','+','plus']]) {
-      $(id).dataset.tooltip='Calibrate heading '+sign+step+'°';
-      $(id).setAttribute('aria-label','Calibrate heading '+word+' '+step+' '+unit);
-    }
-  };
+  $('headingStepToggle').onclick=()=>{state.headingStep=state.headingStep===5?1:5;syncHeadingStep();};
   $('resetView').onclick=()=>state.viewer.resetView();
   $('photoCompassToggle').onclick=()=>{
     state.compassShown=!state.compassShown;
@@ -496,6 +561,7 @@ function bootstrap() {
     onLoading:loading=>$('panoLoading').classList.toggle('hidden',!loading),
     onDirection:direction=>{state.direction=direction;updateAlignment();}
   });
+  state.labels=new MapLabels(state.map);
   state.map.on('style.load',addMapLayers);
   state.map.on('click','vistas-points',e=>{const feature=e.features?.[0];if(feature)selectView(viewId(feature.properties));});
   state.map.on('mouseenter','vistas-points',()=>state.map.getCanvas().style.cursor='pointer');
@@ -507,7 +573,7 @@ function bootstrap() {
   });
   state.map.on('error',e=>{if(state.base==='metro'&&/401|403/.test(String(e.error?.message||'')))notify('MetroMap rejected the API key.');});
   const resize=new ResizeObserver(()=>state.map.resize());resize.observe(document.querySelector('.map-pane'));
-  window.addEventListener('pagehide',event=>{if(event.persisted)return;state.viewer.dispose();resize.disconnect();state.obj.clear();state.map.remove();});
+  window.addEventListener('pagehide',event=>{if(event.persisted)return;state.viewer.dispose();resize.disconnect();state.labels.dispose();state.obj.clear();state.map.remove();});
   document.documentElement.dataset.appState='ready';
 }
 window.addEventListener('unhandledrejection',event=>notify(event.reason?.message || 'Unable to complete the action.'));

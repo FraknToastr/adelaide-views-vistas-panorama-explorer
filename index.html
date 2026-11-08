@@ -7,7 +7,7 @@
   <title>Views &amp; Vistas · Adelaide Park Lands</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-  <link rel="stylesheet" href="css/styles.css?v=20261105-importtips1">
+  <link rel="stylesheet" href="css/styles.css?v=20261108-compassfirst1">
   <script>
     // Report module-graph failures too: these happen before app.js can catch them.
     (()=>{
@@ -36,19 +36,23 @@
     {"imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
-      "./js/app.js": "./js/app.js?v=20261105-importtips1",
-      "./js/core.js": "./js/core.js?v=20261105-importtips1",
-      "./js/geo.js": "./js/geo.js?v=20261105-importtips1",
-      "./js/importers.js": "./js/importers.js?v=20261105-importtips1",
-      "./js/layers.js": "./js/layers.js?v=20261105-importtips1",
-      "./js/alignment.js": "./js/alignment.js?v=20261105-importtips1",
-      "./js/obj-map.js": "./js/obj-map.js?v=20261105-importtips1",
-      "./js/panorama.js": "./js/panorama.js?v=20261105-importtips1",
-      "./js/appearance.js": "./js/appearance.js?v=20261105-importtips1",
-      "./js/tooltips.js": "./js/tooltips.js?v=20261105-importtips1"
+      "./js/app.js": "./js/app.js?v=20261108-compassfirst1",
+      "./js/core.js": "./js/core.js?v=20261108-compassfirst1",
+      "./js/geo.js": "./js/geo.js?v=20261108-compassfirst1",
+      "./js/importers.js": "./js/importers.js?v=20261108-compassfirst1",
+      "./js/layers.js": "./js/layers.js?v=20261108-compassfirst1",
+      "./js/alignment.js": "./js/alignment.js?v=20261108-compassfirst1",
+      "./js/obj-map.js": "./js/obj-map.js?v=20261108-compassfirst1",
+      "./js/panorama.js": "./js/panorama.js?v=20261108-compassfirst1",
+      "./js/appearance.js": "./js/appearance.js?v=20261108-compassfirst1",
+      "./js/tooltips.js": "./js/tooltips.js?v=20261108-compassfirst1",
+      "./js/visibility.js": "./js/visibility.js?v=20261108-compassfirst1",
+      "./js/workspace.js": "./js/workspace.js?v=20261108-compassfirst1",
+      "./js/workspace-ui.js": "./js/workspace-ui.js?v=20261108-compassfirst1",
+      "./js/map-labels.js": "./js/map-labels.js?v=20261108-compassfirst1"
     }}
   </script>
-  <script id="appModule" type="module" src="js/app.js?v=20261105-importtips1"></script>
+  <script id="appModule" type="module" src="js/app.js?v=20261108-compassfirst1"></script>
 </head>
 <body>
   <div class="shell">
@@ -78,7 +82,7 @@
         <div id="map" aria-label="Map of Adelaide viewpoints"></div>
         <div class="map-top"><div class="map-toolbar surface" role="group" aria-label="Map controls">
           <div class="basemap-tabs" role="group" aria-label="Basemap"><button class="basemap-btn" data-base="aerial" aria-pressed="true">Aerial</button><button class="basemap-btn" data-base="topo" aria-pressed="false">Topographic</button><button class="basemap-btn" data-base="metro" aria-pressed="false">MetroMap</button><button class="icon-button" id="metroKeyBtn" data-tooltip="MetroMap API key" aria-label="MetroMap API key"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="15" cy="8" r="5"/><path d="m11 12-8 8v-4l2-2h3l1-3"/></svg></button></div>
-          <div class="map-tools">          <div class="map-layer-widget">
+          <div class="map-tools"><button class="map-mode-button" id="mapLabelsBtn" type="button" aria-label="Location labels" data-tooltip="Show or hide location names and photo attachment icons" aria-pressed="true">Aa</button>          <div class="map-layer-widget">
             <button class="icon-button" id="mapLayersBtn" data-tooltip="Map layers" aria-label="Map layers" aria-expanded="false" aria-controls="mapLayerPanel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 17l9 5 9-5"/></svg></button>
             <div class="map-layer-panel surface" id="mapLayerPanel" hidden><div id="mapLayerControls"></div></div>
           </div><button class="map-mode-button" id="pitchBtn" data-tooltip="Map view: 2D. Switch to 3D." aria-label="Map view: 2D. Switch to 3D." aria-pressed="false">2D</button><button class="icon-button" id="fitBtn" data-tooltip="Fit locations" aria-label="Fit locations"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg></button><button class="icon-button" id="mapFullscreen" data-tooltip="Fullscreen map" aria-label="Fullscreen map" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5m6 0h5v5M20 15v5h-5M9 20H4v-5"/></svg></button></div>
@@ -91,8 +95,8 @@
         <div class="pano-header hidden" id="panoHeader"><div><h2 id="panoTitle"></h2><span id="panoPlace"></span></div></div>
         <div class="pano-bottom hidden" id="panoFooter">
           <div class="control-group photo-navigation"><button class="icon-button" id="prevView" data-tooltip="Previous photo" aria-label="Previous photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button><button class="icon-button" id="nextView" data-tooltip="Next photo" aria-label="Next photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button></div>
-          <div class="control-group heading-controls"><span class="control-label">Heading</span><button class="icon-button" id="headingMinus" data-tooltip="Calibrate heading −5°" aria-label="Calibrate heading minus 5 degrees">−</button><output id="headingValue" aria-label="Heading calibration">0°</output><button class="icon-button" id="headingPlus" data-tooltip="Calibrate heading +5°" aria-label="Calibrate heading plus 5 degrees">+</button><button class="icon-button heading-step" id="headingStepToggle" data-tooltip="Heading step: 5°. Switch to 1°." aria-label="Heading step: 5 degrees. Switch to 1 degree.">5°</button></div>
-          <div class="control-group"><button class="icon-button" id="photoCompassToggle" data-tooltip="Show centre compass line" aria-label="Show centre compass line" aria-pressed="false" aria-controls="photoCompass"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m12 5 3 9-3-2-3 2 3-9ZM12 14v5"/></svg></button><button class="icon-button" id="resetView" data-tooltip="Reset view" aria-label="Reset view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 3v5h5"/></svg></button><button class="icon-button" id="panoFullscreen" data-tooltip="Fullscreen panorama" aria-label="Fullscreen panorama"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5m6 0h5v5M20 15v5h-5M9 20H4v-5"/></svg></button></div>
+          <div class="control-group heading-controls"><span class="heading-option"><span class="heading-option-label">Compass</span><button class="icon-button" id="photoCompassToggle" data-tooltip="Show centre compass line" aria-label="Show centre compass line" aria-pressed="false" aria-controls="photoCompass"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m12 5 3 9-3-2-3 2 3-9ZM12 14v5"/></svg></button></span><span class="control-label">Heading</span><button class="icon-button" id="headingMinus" data-tooltip="Calibrate heading −5°" aria-label="Calibrate heading minus 5 degrees">−</button><output id="headingValue" aria-label="Heading calibration">0°</output><button class="icon-button" id="headingPlus" data-tooltip="Calibrate heading +5°" aria-label="Calibrate heading plus 5 degrees">+</button><span class="heading-option"><span class="heading-option-label">Step</span><button class="icon-button heading-step" id="headingStepToggle" data-tooltip="Heading step: 5°. Switch to 1°." aria-label="Heading step: 5 degrees. Switch to 1 degree.">5°</button></span></div>
+          <div class="control-group"><button class="icon-button" id="resetView" data-tooltip="Reset view" aria-label="Reset view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 3v5h5"/></svg></button><button class="icon-button" id="panoFullscreen" data-tooltip="Fullscreen panorama" aria-label="Fullscreen panorama"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5m6 0h5v5M20 15v5h-5M9 20H4v-5"/></svg></button></div>
         </div>
         <div id="panoLoading" class="pano-loading hidden" role="status">Loading…</div>
       </section>
@@ -100,6 +104,11 @@
   </div>
   <dialog id="importModal" class="modal" aria-labelledby="importHeading">
     <div class="modal-top"><h2 id="importHeading">Data sources</h2><button class="icon-button" data-close="importModal" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>
+    <fieldset class="workspace-frame"><legend>Workspace</legend>
+      <div class="workspace-actions"><button type="button" class="button secondary" id="openWorkspace" data-tooltip="Open a saved workspace and reconnect its source files">Open workspace</button><button type="button" class="button secondary" id="saveWorkspace" data-tooltip="Save data references and viewing settings; source files stay on disk">Save workspace</button></div>
+      <input type="file" id="workspaceInput" accept=".json" hidden>
+      <p class="import-feedback" id="workspaceFeedback" role="status">Save references to your packs and settings. Reconnect files if browser access is unavailable.</p>
+    </fieldset>
     <div class="import-list">
       <div class="import-row"><div><strong>Viewpoints &amp; view cones</strong><span class="import-feedback" id="spatialFeedback" role="status"></span></div><label data-tooltip="Choose viewpoint and view-cone shapefiles or a ZIP" class="choose-file">Files / ZIP<input type="file" id="spatialInput" aria-label="Choose viewpoint and view-cone shapefiles or a ZIP" data-tooltip="Choose viewpoint and view-cone shapefiles or a ZIP" accept=".zip,.shp,.dbf,.shx,.prj,.cpg" multiple></label></div>
       <div class="import-row"><div><strong>360° photographs</strong><span class="import-feedback" id="photosFeedback" role="status"></span></div><label data-tooltip="Choose a photo folder, including its subfolders" class="choose-file">Folder<input type="file" id="photosInput" aria-label="Choose a photo folder, including its subfolders" data-tooltip="Choose a photo folder, including its subfolders" accept=".jpg,.jpeg,.png,.webp" webkitdirectory directory multiple></label></div>
@@ -107,6 +116,18 @@
       <div class="import-row"><div><strong>Reference JSON</strong><span class="import-feedback" id="referenceFeedback" role="status"></span></div><label data-tooltip="Choose the reference JSON for scene-local 3D models" class="choose-file">File<input type="file" id="referenceInput" aria-label="Choose the reference JSON for scene-local 3D models" data-tooltip="Choose the reference JSON for scene-local 3D models" accept=".json"></label></div>
     </div>
     <div class="modal-actions"><button class="button primary" data-close="importModal">Done</button></div>
+  </dialog>
+  <dialog id="workspaceReconnect" class="modal" aria-labelledby="workspaceReconnectHeading">
+    <div class="modal-top"><h2 id="workspaceReconnectHeading">Reconnect workspace</h2></div>
+    <p>Choose the original files or folders for the packs below. Cancelling keeps your current workspace.</p>
+    <div id="workspaceSources" class="workspace-sources"></div>
+    <div class="workspace-actions"><button type="button" class="button primary" id="workspaceLoad">Load workspace</button><button type="button" class="button secondary" id="workspacePartial">Load available data</button><button type="button" class="text-button" id="workspaceCancel">Cancel</button></div>
+  </dialog>
+  <dialog id="sourceConflict" class="modal compact" aria-labelledby="sourceConflictHeading">
+    <div class="modal-top"><h2 id="sourceConflictHeading">Update or add pack?</h2></div>
+    <p>The selected paths match an existing pack. Choose whether to update it or keep both packs.</p>
+    <div class="workspace-actions" id="sourceConflictChoices"></div>
+    <div class="workspace-actions"><button type="button" class="button secondary" id="sourceAddNew">Add as new pack</button><button type="button" class="text-button" id="sourceConflictCancel">Cancel</button></div>
   </dialog>
   <dialog id="metroModal" class="modal compact" aria-labelledby="metroHeading">
     <div class="modal-top"><h2 id="metroHeading">MetroMap access</h2><button class="icon-button" data-close="metroModal" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div>

@@ -22,6 +22,8 @@
 *.[oO][bB][jJ]
 *.[mM][tT][lL]
 *:Zone.Identifier
+# Saved workspaces contain local source references and personal viewing settings.
+*.vistas-workspace.json
 # Credentials, agent state, dependencies and generated artifacts.
 .env
 .env.*

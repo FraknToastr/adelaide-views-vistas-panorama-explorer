@@ -80,7 +80,7 @@ export function createPhotoIndex(files=[]) {
   const key=path=>String(path || '').replace(/\\/g,'/').replace(/^\/+|\/+$/g,'').trim().toLowerCase().replace(/\.(jpg|jpeg|png|webp)$/i,'');
   const add=(map,k,file)=>{if(!map.has(k))map.set(k,file);else if(map.get(k)!==file)map.set(k,null);};
   for (const file of files) {
-    const parts=key(file.webkitRelativePath || file.path || file.name).split('/');
+    const parts=key(file.path || file.webkitRelativePath || file.name).split('/');
     for (let i=0;i<parts.length;i++) add(bySuffix,parts.slice(i).join('/'),file);
     add(byBasename,key(file.name).split('/').pop(),file);
   }

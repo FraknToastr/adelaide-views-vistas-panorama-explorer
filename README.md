@@ -22,15 +22,23 @@ If the page opens but controls are unresponsive after an update, hard-refresh wi
 
 Local source files are read in the browser; the application does not upload them. Photo-folder selection indexes file names and paths only. It does not read or decode image contents, create photo URLs or preload images. A selected location can then load its matching photo.
 
+## Workspaces
+
+**Import data → Save workspace** downloads a `.vistas-workspace.json` file. It contains source references, per-model coordinate-reference settings, location/category choices, appearance, grounding, labels, heading adjustments, the selected photo and map/panorama position. It contains no photos, geometry, API keys or absolute machine paths. Keep the original source files available; the workspace file alone is not a data backup.
+
+**Open workspace** restores the referenced packs in one operation when access is available. Chrome/Edge can remember granted file/folder handles in IndexedDB; permissions may need renewing, and another browser, origin/port or computer needs reconnection. Other browsers retain normal file/folder imports and use the reconnect dialog. Choose the matching source folders/files, confirm changed sizes/dates explicitly, then load. Renamed root folders work when their internal relative paths are unchanged. Cancel leaves the current workspace intact; **Load available data** explicitly opens a partial workspace and preserves missing references for later reconnection.
+
+Individual imports add packs alongside existing data. Rechoosing the same native file/folder updates its pack. When ordinary file inputs cannot distinguish identical paths, choose **Update** or **Add as new pack**. Each model pack retains its applicable reference configuration, so later reference imports do not reposition existing models. Workspace restoration indexes photo paths only, then decodes just the selected photo.
+
 ## Locations and map controls
 
-The **Layers** button opens or closes a simple location sidebar. Search by local/park name or viewpoint ID, then select a location name to view its photo. Each location has one checkbox controlling all its shapefile and 3D Model layers, with a mixed state when only some are visible. Locations remain non-expandable. Checking a box does not change the selected photo. **Zoom to selection** frames the selected location without changing visibility.
+The **Layers** button opens or closes the flat location sidebar. Search by local/park name or viewpoint ID, then select a name to view its photo. Each location checkbox enables that location’s layers without changing the selected photo. Unmatched models appear under **Other layers**. **Zoom to selection** frames the selected location without changing visibility.
 
-The sidebar's **Select all / Select none** toggle controls all loaded layers, including locations outside search results and unmatched models. It is disabled when no layers are loaded. Sidebar checkboxes, overall visibility, and map category/group controls stay synchronized. New imports follow the most recent applicable location, category, group or overall visibility action. Visibility choices last for the page session.
+The sidebar’s **Select all / Select none** toggle changes location checkboxes, including locations outside search results and unmatched models. It never changes the map’s category controls. Map category/group controls never change location checkboxes: an object is visible only when both its location and its source/category are enabled. Existing choices survive additive imports; new locations start enabled.
 
-One compact map panel contains the basemap buttons, global layer selector, cube **2D/3D** toggle, target **Fit locations** control, **MetroMap API key**, and fullscreen. Search remains in the sidebar. Fullscreen uses the same icon and behaviour as the photo viewer.
+One compact map panel contains the basemap buttons, MetroMap API key button beside MetroMap, global layer selector, text **2D/3D** toggle, **Aa** location-label toggle, target **Fit locations** control and fullscreen. Labels show local names, with a paperclip when an unambiguous accessible photo match exists; labels follow effective point visibility. Label creation does not decode photos. Search remains in the sidebar.
 
-The map layer selector has **Shapefile** and **3D Models** groups, each with Points, Viewsheds and Frustums checkboxes and its own **Select all / Select none** toggle. Actions affect all loaded locations, even when the sidebar is filtered. Empty categories are disabled. Category choices survive location selection and basemap changes and apply to later imports for the current page session. Shapefile frustums are camera/reference sectors derived from viewpoint attributes.
+The map layer selector has **Shapefile** and **3D Models** groups, each with Points, Viewsheds and Frustums gates and its own **Select all / Select none** toggle. Gates apply across locations, including those outside search results. Empty categories are disabled. Choices survive selection and basemap changes and apply to later imports. Shapefile frustums are camera/reference sectors derived from viewpoint attributes.
 
 Both separate-category models and combined Blender 1.3.1 exports associate with locations by VIEW_ID. The importer separates combined models internally so the global category controls continue to work.
 
@@ -80,7 +88,7 @@ Uncheck the control to restore original elevations. The selected mode survives O
 
 Heading calibration and the optional MetroMap API key use localStorage. The key is saved only when **Remember key in this browser** is checked. **Forget key** removes it from storage and the active session. Imagery tile requests send the key to MetroMap.
 
-Layer visibility lasts for the page session. Photo files must be selected again after a page reload.
+Visibility choices last for the page session unless saved in a workspace. Without a workspace, photo files must be selected again after reloading the page.
 
 ## Checks
 
@@ -96,13 +104,15 @@ When releasing changes to local JavaScript or CSS, update their shared release t
 
 The browser check requires an installed Playwright package and its matching Chromium runtime. It looks for a compatible package/browser pair in project, global npm and npm cache packages, or accepts an absolute package location through `PLAYWRIGHT_MODULE`. No package installation is performed by the check.
 
-For full real-data checks, place the supplied spatial ZIP and photo directory in this workspace, or set `VISTAS_SPATIAL_ZIP` and `VISTAS_PHOTO_FOLDER`. The browser check validates the supplied dataset counts, zero photo decodes during folder indexing, all nine OBJ layers, mixed and bulk visibility, basemap switching, panorama loading and cleanup, and desktop/mobile layouts. Screenshots go to `/tmp/vistas-browser` by default, configurable with `VISTAS_TEST_ARTIFACTS`.
+For full real-data checks, place the supplied spatial ZIP and photo directory in this workspace, or set `VISTAS_SPATIAL_ZIP` and `VISTAS_PHOTO_FOLDER`. The browser check validates the supplied counts, metadata-only photo indexing, all nine OBJ layers, independent location/category gates, model alignment, basemap switching, panorama cleanup and responsive layouts. It also checks workspace save/restore, cancellation, failed-load rollback, reconnection, label sprites and IndexedDB handle persistence. Screenshots go to `/tmp/vistas-browser` by default, configurable with `VISTAS_TEST_ARTIFACTS`.
 
 ## Main files
 
 - `index.html`, `css/styles.css`: interface and botanical theme.
 - `js/app.js`: application state, map layers and interactions.
-- `js/layers.js`: location hierarchy, visibility and photo indexing.
+- `js/layers.js`, `js/visibility.js`: location grouping, independent visibility gates and photo indexing.
+- `js/workspace.js`, `js/workspace-ui.js`: source packs, workspace validation, file-handle storage and reconnect controls.
+- `js/map-labels.js`: cached map-label sprites and photo attachment icons.
 - `js/alignment.js`: cached polygon preparation and directional clipping.
 - `js/panorama.js`, `js/obj-map.js`: demand-rendered panorama and shared-context OBJ renderer.
 - `js/importers.js`, `js/core.js`, `js/geo.js`: local file import, data helpers and coordinate conversion.
