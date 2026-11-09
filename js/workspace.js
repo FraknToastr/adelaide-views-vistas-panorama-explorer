@@ -3,7 +3,14 @@ export const MAX_WORKSPACE_BYTES=10*1024*1024;
 const ROLES=['spatial','photos','models','reference'];
 export const newId=()=>globalThis.crypto.randomUUID?.()||Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
 export function filePath(file){return String(file.path||file.webkitRelativePath||file.name).replace(/\\/g,'/');}
-export function fileInfo(file){return {path:filePath(file),size:file.size,lastModified:file.lastModified};}
+export function fileInfo(file){
+  const info={path:filePath(file),size:file.size,lastModified:file.lastModified};
+  if(file.workspaceRelativePath)info.relativePath=file.workspaceRelativePath;
+  return info;
+}
+function validRelativePath(path){
+  return typeof path==='string'&&path.split('/').every(part=>part&&part!=='.'&&part!=='..'&&!/[:\\]/.test(part));
+}
 const signature=files=>JSON.stringify(files.map(fileInfo).sort((a,b)=>a.path.localeCompare(b.path)));
 export function validateReference(value){
   if(!value||Array.isArray(value)||typeof value!=='object')throw new Error('Invalid reference JSON.');
@@ -47,7 +54,7 @@ export function validateWorkspace(value){
     if(!source||typeof source.id!=='string'||!source.id||ids.has(source.id)||!ROLES.includes(source.role)||!['files','directory'].includes(source.mode)||typeof source.name!=='string'||typeof source.root!=='string'||!Array.isArray(source.files)||!source.files.length)fail();
     ids.add(source.id);const paths=new Set();
     for(const file of source.files){
-      if(typeof file.path!=='string'||!file.path||file.path.startsWith('/')||file.path.includes('\\')||file.path.split('/').some(p=>!p||p==='.'||p==='..'||p.includes(':'))||paths.has(file.path)||!Number.isSafeInteger(file.size)||file.size<0||!Number.isFinite(file.lastModified))fail();
+      if(!file||!validRelativePath(file.path)||file.relativePath!==undefined&&!validRelativePath(file.relativePath)||paths.has(file.path)||!Number.isSafeInteger(file.size)||file.size<0||!Number.isFinite(file.lastModified))fail();
       paths.add(file.path);if(++count>100000)fail();
     }
   }
@@ -75,7 +82,7 @@ export function validateWorkspace(value){
   if(s.map)state.map={center:[...s.map.center],zoom:s.map.zoom,pitch:s.map.pitch,bearing:s.map.bearing};
   if(s.panorama)state.panorama={yaw:s.panorama.yaw,pitch:s.panorama.pitch,fov:s.panorama.fov};
   if(s.appearance)state.appearance=Object.fromEntries(['obj','shape'].map(group=>[group,Object.fromEntries(['point','line','fill'].map(part=>[part,{color:s.appearance[group][part].color,transparency:s.appearance[group][part].transparency}]))]));
-  return {format:FORMAT,version:1,id:value.id,sources:value.sources.map(({id,role,name,mode,root,files,referenceId,referenceConfig})=>({id,role,name,mode,root,files:files.map(({path,size,lastModified})=>({path,size,lastModified})),referenceId:referenceId||null,referenceConfig:referenceConfig?referenceSettings(referenceConfig):null})),state};
+  return {format:FORMAT,version:1,id:value.id,sources:value.sources.map(({id,role,name,mode,root,files,referenceId,referenceConfig})=>({id,role,name,mode,root,files:files.map(({path,size,lastModified,relativePath})=>relativePath?{path,size,lastModified,relativePath}:{path,size,lastModified}),referenceId:referenceId||null,referenceConfig:referenceConfig?referenceSettings(referenceConfig):null})),state};
 }
 // Only handles live in IndexedDB; image/model contents remain on disk.
 export class HandleStore {
@@ -122,4 +129,52 @@ export function reconnectFiles(source,files){
     return file;
   });
   return {files:matched,changed};
+}
+
+export function indexWorkspaceFolder(files){
+  const paths=new Map(),names=new Map();
+  for(const file of files){
+    // Directory inputs include the chosen folder name as their first segment.
+    const path=file.webkitRelativePath?.split('/').slice(1).join('/');
+    if(!validRelativePath(path))continue;
+    paths.set(path,file);
+    if(!names.has(file.name))names.set(file.name,[]);
+    names.get(file.name).push(path);
+  }
+  return {paths,names};
+}
+
+export function resolveWorkspaceFolderSource(source,{paths,names}){
+  const unchanged=(info,file)=>file.size===info.size&&file.lastModified===info.lastModified;
+  const candidates=info=>names.get(info.path.split('/').at(-1))||[];
+  const matchingPaths=source.files.map(info=>info.relativePath);
+  // Legacy directory imports retain their original folder and internal tree.
+  // Find one common prefix for the whole pack so files cannot mix across copies.
+  if(source.mode==='directory'&&matchingPaths.every(path=>!path)){
+    const first=source.files[0];
+    const prefixes=paths.has(first.path)?['']:candidates(first)
+      .filter(path=>path.endsWith('/'+first.path)).map(path=>path.slice(0,-first.path.length));
+    const complete=prefixes.filter(prefix=>source.files.every(info=>paths.has(prefix+info.path)));
+    if(complete.length!==1)throw new Error(complete.length?'Multiple folders match '+source.name+'.':'Missing source folder: '+source.root);
+    source.files.forEach((info,i)=>{matchingPaths[i]=complete[0]+info.path;});
+  }
+  let changed=false;
+  const files=source.files.map((info,i)=>{
+    let path=matchingPaths[i]||info.path;
+    if(!paths.has(path)&&!matchingPaths[i]){
+      const options=candidates(info);
+      const exact=options.filter(option=>unchanged(info,paths.get(option)));
+      const matches=exact.length?exact:options;
+      if(matches.length>1)throw new Error('Multiple files match '+info.path+'.');
+      path=matches[0]||path;
+    }
+    const original=paths.get(path);
+    if(!original)throw new Error('Missing file: '+path);
+    if(!unchanged(info,original))changed=true;
+    // Keep import-facing paths stable and retain the exact project-relative path for the next save.
+    const file=new File([original],original.name,{type:original.type,lastModified:original.lastModified});
+    Object.defineProperties(file,{path:{value:info.path,configurable:true},workspaceRelativePath:{value:path}});
+    return file;
+  });
+  return {files,changed};
 }

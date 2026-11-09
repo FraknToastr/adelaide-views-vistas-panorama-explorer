@@ -159,6 +159,7 @@ export class PanoramaViewer {
     this.pending?.resolve(false);this.pending=null;this.decoding?.resolve(false);
     this._releaseImage();this.onLoading(false);
   }
+  setViewToNorth(){return this.changeHeading(-this.currentDirection.heading);}
   changeHeading(delta) {this.offset=wrapDegrees(this.offset+delta);this.render();return this.offset;}
   resetView(){this.yaw=0;this.pitch=0;this.fov=73;this.render();}
   rotate(deltaYaw,deltaPitch=0){this.yaw=wrapDegrees(this.yaw+deltaYaw);this.pitch=clamp(this.pitch+deltaPitch,-87,87);this.render();}

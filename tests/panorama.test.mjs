@@ -160,3 +160,16 @@ test('decode failure leaves no previous image, and disposed viewers refuse new l
   assert.equal(h.viewer.resizeObserver.disconnected,true);
   await assert.rejects(h.viewer.load({name:'later.jpg'}),/disposed/);
 });
+
+test('setting current view north preserves image direction and normalises arbitrary yaw',async()=>{
+ const h=await harness();await h.viewer.load({name:'north.jpg'});h.flush();
+ for(const yaw of [45,-45,359,721]){
+   h.viewer.yaw=yaw;h.viewer.offset=73;h.viewer.render();h.flush();
+   const look=[...h.viewer.camera.look],pitch=h.viewer.pitch;
+   h.viewer.setViewToNorth();h.flush();
+   assert.equal(h.viewer.currentDirection.heading,0);
+   assert.deepEqual(h.viewer.camera.look,look);assert.equal(h.viewer.pitch,pitch);
+   h.viewer.rotate(15);h.flush();assert.equal(h.viewer.currentDirection.heading,15);
+ }
+ h.viewer.dispose();
+});

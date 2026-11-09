@@ -4,13 +4,11 @@ A static browser application for Adelaide Park Lands viewpoints, view-cone shape
 
 ## Start
 
-Run a local HTTP server in this directory, then open its address in Chrome or Edge. The supplied Windows launcher can also start the app.
+Extract the ZIP to a folder and double-click **index.html** in Chrome or Edge. Keep the extracted files together. The local build uses standard file and folder selection. Use **Open workspace folder** to reopen your workspace and its source files together.
 
-Example: `python3 -m http.server 8765`, then open http://localhost:8765.
+The double-click build includes the libraries it needs to launch and import local data. Online basemaps still require a network connection. Both HTTP(S) and direct-file launch use locally supplied libraries.
 
-The application uses pinned, externally hosted MapLibre, Three.js, shpjs, JSZip and proj4 libraries. Basemap imagery also requires a network connection.
-
-If the page opens but controls are unresponsive after an update, hard-refresh with **Ctrl+Shift+R**. Local modules use matching versioned URLs to prevent an older cached dependency from being mixed with newer code. Module-loading failures display an on-screen startup error.
+For HTTP testing, run `python3 -m http.server 8765` and open http://localhost:8765. If controls are unresponsive after an HTTP update, hard-refresh with **Ctrl+Shift+R**. Startup failures display an on-screen error.
 
 ## Import
 
@@ -24,9 +22,15 @@ Local source files are read in the browser; the application does not upload them
 
 ## Workspaces
 
-**Import data → Save workspace** downloads a `.vistas-workspace.json` file. It contains source references, per-model coordinate-reference settings, location/category choices, appearance, grounding, labels, heading adjustments, the selected photo and map/panorama position. It contains no photos, geometry, API keys or absolute machine paths. Keep the original source files available; the workspace file alone is not a data backup.
+**Import data → Save workspace** downloads a `.vistas-workspace.json` file using the browser’s normal download settings. It typically goes to Downloads, or the browser prompts for a location if configured to do so. It contains source references, per-model coordinate-reference settings, location/category choices, appearance, grounding, labels, heading adjustments, the selected photo and map/panorama position. It contains no photos, geometry, API keys or absolute machine paths. Keep the original source files available; the workspace file alone is not a data backup.
 
-**Open workspace** restores the referenced packs in one operation when access is available. Chrome/Edge can remember granted file/folder handles in IndexedDB; permissions may need renewing, and another browser, origin/port or computer needs reconnection. Other browsers retain normal file/folder imports and use the reconnect dialog. Choose the matching source folders/files, confirm changed sizes/dates explicitly, then load. Renamed root folders work when their internal relative paths are unchanged. Cancel leaves the current workspace intact; **Load available data** explicitly opens a partial workspace and preserves missing references for later reconnection.
+### Portable workspace folders
+
+Move the downloaded workspace JSON to the top of a project folder containing the original source files and folders. Keep the original photo and model folder names and their internal layout. Open **Import data → Open workspace folder** and choose the project folder once. If it contains multiple workspace JSONs, pick one from the list.
+
+Older workspace files use their saved folder structure and file metadata to locate sources. After the first successful folder open, save again and put the new JSON at the top of the same project folder. The new JSON records exact relative paths. Move or rename the whole project folder freely while keeping its internal structure. Missing, ambiguous or changed sources are listed for review.
+
+**Open workspace JSON** restores the referenced packs in one operation when access is available. When served over HTTP(S), Chrome/Edge can remember granted file/folder handles in IndexedDB; permissions may need renewing, and another browser, origin/port or computer needs reconnection. Other browsers retain normal file/folder imports and use the reconnect dialog. Choose the matching source folders/files, confirm changed sizes/dates explicitly, then load. Renamed root folders work when their internal relative paths are unchanged. Cancel leaves the current workspace intact; **Load available data** explicitly opens a partial workspace and preserves missing references for later reconnection.
 
 Individual imports add packs alongside existing data. Rechoosing the same native file/folder updates its pack. When ordinary file inputs cannot distinguish identical paths, choose **Update** or **Add as new pack**. Each model pack retains its applicable reference configuration, so later reference imports do not reposition existing models. Workspace restoration indexes photo paths only, then decodes just the selected photo.
 
@@ -100,7 +104,7 @@ npm run test:browser
 
 The unit suite covers source grouping, multi-shapefile imports, recursive metadata-only photo indexing, ambiguity handling, directional clipping with holes and multipart polygons, panorama races and resource cleanup, and individual OBJ visibility and style lifecycle.
 
-When releasing changes to local JavaScript or CSS, update their shared release token in `index.html` together. Startup regression checks verify complete module mappings at both localhost and GitHub Pages project URLs.
+After editing JavaScript, run `npm ci` to install the pinned build tools and `npm run build:local` to regenerate the included double-click bundle. When releasing changes to HTTP JavaScript or CSS, update their shared release token in `index.html` together. Startup regression checks verify complete module mappings at both localhost and GitHub Pages project URLs.
 
 The browser check requires an installed Playwright package and its matching Chromium runtime. It looks for a compatible package/browser pair in project, global npm and npm cache packages, or accepts an absolute package location through `PLAYWRIGHT_MODULE`. No package installation is performed by the check.
 
@@ -116,3 +120,15 @@ For full real-data checks, place the supplied spatial ZIP and photo directory in
 - `js/alignment.js`: cached polygon preparation and directional clipping.
 - `js/panorama.js`, `js/obj-map.js`: demand-rendered panorama and shared-context OBJ renderer.
 - `js/importers.js`, `js/core.js`, `js/geo.js`: local file import, data helpers and coordinate conversion.
+
+### Calibrating photo north
+
+Centre a direction you know is true north in the photograph, then choose **Set North** beside the compass controls. The current view becomes 0° without moving the image. This saves the correction for that location and includes it in workspace saves. Use the 1°/5° heading controls to refine it. Accuracy depends on your north reference; this does not automatically identify north or rotate imported frustums.
+
+### Restricted work browsers
+
+Saving requests an ordinary JSON download; browser and workplace download policies still apply. If a native read picker is denied, choose **Choose using standard picker**. Cancellation leaves existing data intact. Basemap imagery still needs access to its provider even though application libraries are supplied locally.
+
+### Rebuilding and launching
+
+Run `npm ci` then `npm run build:local` to regenerate vendor libraries and the direct-file bundle from pinned packages. Commit generated assets with their source changes. The existing `START_WINDOWS.bat` launcher remains available; alternatively extract the complete app and open `index.html` directly.

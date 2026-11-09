@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const root=new URL('../',import.meta.url);
 const html=await readFile(new URL('index.html',root),'utf8');
 const imports=JSON.parse(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]).imports;
-const entry=html.match(/<script id="appModule" type="module" src="([^"]+)"/)[1];
+const entry=html.match(/appScript\.src='(js\/app\.js[^']+)'/)[1];
 
 test('local modules share a release URL at localhost and under a GitHub Pages project path',async()=>{
   const version=new URL(entry,'http://localhost/').searchParams.get('v');
@@ -55,4 +55,9 @@ test('a module failure before bootstrap displays an error instead of leaving the
   listeners.DOMContentLoaded();assert.equal(notices.length,1);
   assert.match(notices[0].textContent,/App could not start/);
   listeners.error({target:{id:'appModule'}});assert.equal(notices.length,1);
+});
+
+test('all runtime libraries are local and generated entry points exist',async()=>{
+ assert.doesNotMatch(html,/https:\/\/cdn\.jsdelivr\.net/);
+ for(const asset of ['js/app-local.bundle.js','vendor/maplibre-gl.js','vendor/maplibre-gl.css','vendor/shp.min.js','vendor/jszip.min.js','vendor/proj4.js','vendor/three/three.module.js','vendor/three/three.core.js','vendor/three/addons/loaders/OBJLoader.js'])assert.ok((await readFile(new URL(asset,root))).length,asset);
 });

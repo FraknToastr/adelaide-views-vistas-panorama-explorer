@@ -1,5 +1,10 @@
 ## Unreleased
 
+- Merge portable workspace folders and browser-download saving; offer standard file pickers when native access is denied.
+- Vendor all runtime libraries, add reproducible builds and a double-click bundle while retaining the Windows server launcher.
+- Add Set North photo calibration, persisted with location headings and workspaces; preserve imported frustum geometry.
+- Verify portable paths, restricted picker fallback, local-file and GitHub Pages-style startup, and calibration save/load with real datasets.
+
 - Add reference-only workspace save/open, remembered file/folder handles, reconnect/change confirmation and staged restoration; retain source packs for additive imports and pack-specific model reference settings.
 - Separate location checkboxes from source/category gates; effective visibility requires both. Preserve independent choices across imports, workspace restores and basemap changes.
 - Add map location labels with photo attachment icons, a Labels toggle, cached sprites and accessible photo-availability descriptions.

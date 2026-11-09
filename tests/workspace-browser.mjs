@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 
 export async function checkWorkspace(page){
   await page.evaluate(async()=>{
@@ -7,7 +8,11 @@ export async function checkWorkspace(page){
     s.map.jumpTo({pitch:42,bearing:17,zoom:16});
     s.viewer.yaw=33;s.viewer.pitch=7;s.viewer.fov=64;s.viewer.render();
   });
-  await page.locator('#mapLabelsBtn').click();
+  await page.evaluate(()=>{const v=window.vistas.state.viewer;v.rotate(37);});
+  await page.locator('#setPhotoNorth').click();
+  await page.waitForFunction(()=>window.vistas.state.direction.heading===0);
+  assert.equal(await page.evaluate(()=>window.vistas.state.headings.get(window.vistas.state.selected)),await page.evaluate(()=>window.vistas.state.viewer.offset));
+ await page.locator('#mapLabelsBtn').click();
   await page.locator('.location[data-location="TorRiv.M"] .location-row input').uncheck();
   await page.locator('#mapLayersBtn').click();
   await page.locator('#mapLayerControls input[data-source="obj"][data-kind="viewshed"]').uncheck();
@@ -19,10 +24,14 @@ export async function checkWorkspace(page){
     const s=window.vistas.state;
     window.savedWorkspace=window.vistas.workspaceSnapshot();
     window.savedFiles=new Map(s.sources.values().map(pack=>[pack.id,pack.files]));
-    window.showSaveFilePicker=async()=>({createWritable:async()=>({write:async value=>{window.savedWorkspaceText=value;},close:async()=>{},abort:async()=>{}})});
+    window.showSaveFilePicker=async()=>{throw new DOMException('Write access blocked','NotAllowedError');};
   });
-  await page.locator('#importBtn').click();await page.locator('#saveWorkspace').click();
-  await page.waitForFunction(()=>!!window.savedWorkspaceText);
+  await page.locator('#importBtn').click();
+  const downloading=page.waitForEvent('download');
+  await page.locator('#saveWorkspace').click();
+  const download=await downloading;
+  assert.equal(download.suggestedFilename(),'views-vistas.vistas-workspace.json');
+  await page.evaluate(text=>{window.savedWorkspaceText=text;},await readFile(await download.path(),'utf8'));
   assert.deepEqual(await page.evaluate(()=>JSON.parse(window.savedWorkspaceText)),await page.evaluate(()=>window.savedWorkspace));
   const exportChecks=await page.evaluate(()=>{const value=JSON.parse(window.savedWorkspaceText);return {version:value.version,packs:value.sources.length,roles:value.sources.map(s=>s.role).sort(),secret:'metroKey' in value.state,bytes:value.sources.some(s=>'data' in s||'access' in s)};});
   assert.deepEqual(exportChecks,{version:1,packs:4,roles:['models','photos','reference','spatial'],secret:false,bytes:false});
@@ -36,7 +45,7 @@ export async function checkWorkspace(page){
   assert.deepEqual(await page.evaluate(()=>window.vistas.state.gates.snapshot()),await page.evaluate(()=>window.savedWorkspace.state.visibility));
   assert.equal(await page.locator('#mapLabelsBtn').getAttribute('aria-pressed'),'false');
   assert.equal(await page.evaluate(()=>window.vistas.state.obj.loaded.length),9);
-  assert.deepEqual(await page.evaluate(()=>{const v=window.vistas.state.viewer;return {yaw:v.yaw,pitch:v.pitch,fov:v.fov};}),{yaw:33,pitch:7,fov:64});
+  assert.deepEqual(await page.evaluate(()=>{const v=window.vistas.state.viewer;return {yaw:v.yaw,pitch:v.pitch,fov:v.fov};}),{yaw:70,pitch:7,fov:64});
   assert.equal(await page.locator('.location[data-location="TorRiv.M"] .location-row input').isChecked(),false);
   // A failed model parse must preserve the entire live session.
   assert.equal(await page.evaluate(async()=>{

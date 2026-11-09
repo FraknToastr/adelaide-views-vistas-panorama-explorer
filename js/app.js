@@ -194,6 +194,7 @@ function updateAlignment() {
 }
 function updatePhotoCompass() {
   const heading=state.direction?.heading;
+  $('setPhotoNorth').disabled=!state.viewer?.active;
   const shown=state.compassShown && state.viewer?.active && Number.isFinite(heading);
   $('photoCompass').classList.toggle('hidden',!shown);
   if(shown) {
@@ -333,6 +334,12 @@ function stepPhoto(delta) {
   const list=state.photoViews;if(!list.length)return;
   const index=list.findIndex(location=>location.id===state.selected);
   selectView(list[(index+delta+list.length)%list.length].id);
+}
+export function setPhotoNorth(){
+  if(!state.viewer?.active||!state.selected)return;
+  const heading=state.viewer.setViewToNorth();
+  $('headingValue').textContent=Math.round(heading)+'°';saveHeading(state.selected,heading);
+  state.direction=state.viewer.currentDirection;updateAlignment();
 }
 function updateHeading(delta) {
   if(!state.viewer?.active||!state.selected)return;
@@ -529,6 +536,7 @@ function wireUI() {
   $('applyMetro').onclick=setMetroKey;
   $('forgetMetro').onclick=()=>{try{localStorage.removeItem(METRO_STORAGE);}catch{/* optional */}state.metroKey='';$('metroKeyInput').value='';$('rememberMetro').checked=false;feedback('metroFeedback','');if(state.base==='metro')useBasemap('aerial');};
   $('prevView').onclick=()=>stepPhoto(-1);$('nextView').onclick=()=>stepPhoto(1);
+  $('setPhotoNorth').onclick=setPhotoNorth;
   $('headingMinus').onclick=()=>updateHeading(-state.headingStep);$('headingPlus').onclick=()=>updateHeading(state.headingStep);
   $('headingStepToggle').onclick=()=>{state.headingStep=state.headingStep===5?1:5;syncHeadingStep();};
   $('resetView').onclick=()=>state.viewer.resetView();

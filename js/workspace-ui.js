@@ -1,9 +1,15 @@
-import {HandleStore,readAccess,reconnectFiles,relevantFiles,validateWorkspace,newId,MAX_WORKSPACE_BYTES,filePath} from './workspace.js';
+import {HandleStore,readAccess,reconnectFiles,relevantFiles,validateWorkspace,indexWorkspaceFolder,resolveWorkspaceFolderSource,newId,MAX_WORKSPACE_BYTES} from './workspace.js';
 
 export function installWorkspaceUI({registry,snapshot,restore,importFiles,notify,setBusy}){
   const $=id=>document.getElementById(id),store=new HandleStore();let busy=false;
+  const useNativePickers=window.location.protocol!=='file:';
   const inputs={spatialInput:'spatial',photosInput:'photos',objInput:'models',objFolderInput:'models',referenceInput:'reference'};
-  function lock(on){busy=on;setBusy(on);for(const id of ['saveWorkspace','openWorkspace',...Object.keys(inputs)])$(id).disabled=on;}
+  function lock(on){busy=on;setBusy(on);for(const id of ['saveWorkspace','openWorkspace','openWorkspaceFolder',...Object.keys(inputs)])$(id).disabled=on;}
+  function offerStandard(input,status,error){
+    status.textContent=error.message+' ';
+    const button=document.createElement('button');button.type='button';button.className='button secondary';button.textContent='Choose using standard picker';
+    button.onclick=()=>{input.dataset.standardPickerOnce='true';input.click();};status.append(button);
+  }
   async function choose(role,directory,input,onPicked=()=>{}){
     const extensions={spatial:'.zip,.shp,.dbf,.shx,.prj,.cpg',photos:'.jpg,.jpeg,.png,.webp',models:'.zip,.obj,.json,.mtl',reference:'.json'};
     const access=directory?{directory:await window.showDirectoryPicker({mode:'read'})}:{files:await window.showOpenFilePicker({multiple:role!=='reference',types:[{description:role==='reference'?'Reference JSON':role,accept:{'application/octet-stream':(input?.accept||extensions[role]).split(',')}}]})};
@@ -34,49 +40,44 @@ export function installWorkspaceUI({registry,snapshot,restore,importFiles,notify
     const input=$(id),directory=input.hasAttribute('webkitdirectory');
     input.onchange=()=>{const files=Array.from(input.files||[]);input.value='';if(files.length)add(role,files);};
     input.addEventListener('click',event=>{
+      if(input.dataset.standardPickerOnce){delete input.dataset.standardPickerOnce;return;}
       const available=directory?window.showDirectoryPicker:window.showOpenFilePicker;
-      if(!available||busy)return;event.preventDefault();
+      if(!useNativePickers||!available||busy)return;event.preventDefault();
       // Invoke the picker before awaiting anything, preserving the user gesture.
       const feedbackId={spatial:'spatialFeedback',photos:'photosFeedback',models:'objFeedback',reference:'referenceFeedback'}[role];
-      choose(role,directory,input,()=>{lock(true);$(feedbackId).textContent='Indexing…';}).then(({files,access})=>{lock(false);return add(role,files,access);}).catch(error=>{lock(false);if(error.name!=='AbortError'){$(feedbackId).textContent=error.message;notify(error.message);}});
+      choose(role,directory,input,()=>{lock(true);$(feedbackId).textContent='Indexing…';}).then(({files,access})=>{lock(false);return add(role,files,access);}).catch(error=>{lock(false);if(error.name!=='AbortError'){offerStandard(input,$(feedbackId),error);}});
     });
   }
-  $('saveWorkspace').onclick=async()=>{
+  $('saveWorkspace').onclick=()=>{
     if(busy)return;
     try{
-      const document=snapshot(),text=JSON.stringify(document,null,2),name='views-vistas.vistas-workspace.json';
-      if(new Blob([text]).size>MAX_WORKSPACE_BYTES)throw new Error('Workspace metadata exceeds the 10 MB limit. Split the data into smaller workspaces.');
-      if(window.showSaveFilePicker){
-        const handle=await window.showSaveFilePicker({suggestedName:name,types:[{description:'Views & Vistas workspace',accept:{'application/json':['.json']}}]});
-        for(const pack of registry().values()){
-          const sameName=()=>pack.files.some(file=>file.name===handle.name)||pack.manifest?.files.some(file=>file.path.split('/').pop()===handle.name);
-          let source=false;
-          try{
-            if(pack.access?.files){for(const input of pack.access.files)if(await handle.isSameEntry(input)){source=true;break;}}
-            else if(pack.access?.directory){const relative=await pack.access.directory.resolve(handle);source=!!relative&&pack.files.some(file=>filePath(file).split('/').slice(1).join('/')===relative.join('/'));}
-            else source=sameName();
-          }catch{source=sameName();}
-          if(source)throw new Error('Choose a workspace filename that does not overwrite an imported source file.');
-        }
-        const writable=await handle.createWritable();try{await writable.write(text);await writable.close();}catch(error){await writable.abort().catch(()=>{});throw error;}
-      }else{
-        const url=URL.createObjectURL(new Blob([text],{type:'application/json'})),link=window.document.createElement('a');
-        link.href=url;link.download=name;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-      }
-      $('workspaceFeedback').textContent='Workspace saved. Source files remain on disk.';
-    }catch(error){if(error.name!=='AbortError')notify(error.message);}
+      const name='views-vistas.vistas-workspace.json';
+      const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});
+      if(blob.size>MAX_WORKSPACE_BYTES)throw new Error('Workspace metadata exceeds the 10 MB limit. Split the data into smaller workspaces.');
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement('a');
+      link.href=url;link.download=name;
+      document.body.append(link);
+      try{link.click();}finally{link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+      $('workspaceFeedback').textContent='Workspace download requested. Check your browser’s downloads.';
+    }catch(error){notify(error.message);}
   };
-  async function open(file){
+  async function open(file,folder=null){
     if(busy)return;lock(true);$('workspaceFeedback').textContent='Opening workspace…';
     try{
       if(file.size>MAX_WORKSPACE_BYTES)throw new Error('Workspace JSON exceeds the 10 MB limit.');
       const workspace=validateWorkspace(JSON.parse(await file.text())),resolved=new Map(),pending=[];
       for(const source of workspace.sources){
         try{
-          const current=registry().packs.get(source.id),access=current?.access||await store.get(source.id);
-          const files=access?await readAccess(access):current?.files;
-          if(!files?.length)throw new Error('Reconnect this source.');
-          const result=reconnectFiles(source,files);
+          let access=null,result;
+          if(folder)result=resolveWorkspaceFolderSource(source,folder);
+          else{
+            const current=registry().packs.get(source.id);
+            access=current?.access||await store.get(source.id);
+            const files=access?await readAccess(access):current?.files;
+            if(!files?.length)throw new Error('Choose the workspace folder or reconnect this source.');
+            result=reconnectFiles(source,files);
+          }
           const pack={...source,...result,access};
           if(result.changed)pending.push({source,pack,message:'Files have changed since this workspace was saved.'});else resolved.set(source.id,pack);
         }catch(error){pending.push({source,message:error.message});}
@@ -113,9 +114,9 @@ export function installWorkspaceUI({registry,snapshot,restore,importFiles,notify
           if(item.pack){complete(item.pack);return;}
           try{
             const directory=item.source.mode==='directory';
-            if(directory?window.showDirectoryPicker:window.showOpenFilePicker){const result=await choose(item.source.role,directory);await accept(result.files,result.access);}
+            if(useNativePickers&&(directory?window.showDirectoryPicker:window.showOpenFilePicker)){const result=await choose(item.source.role,directory);await accept(result.files,result.access);}
             else input.click();
-          }catch(error){if(error.name!=='AbortError')status.textContent=error.message;}
+          }catch(error){if(error.name!=='AbortError')offerStandard(input,status,error);}
         };
         row.append(name,status,button,input);list.append(row);
       }
@@ -128,12 +129,34 @@ export function installWorkspaceUI({registry,snapshot,restore,importFiles,notify
       update();dialog.showModal();
     });
   }
+  $('openWorkspaceFolder').onclick=()=>$('workspaceFolderInput').click();
+  $('workspaceFolderInput').onchange=()=>{
+    const input=$('workspaceFolderInput'),folder=indexWorkspaceFolder(input.files||[]);
+    input.value='';
+    if(busy||!folder.paths.size)return;
+    const workspaces=[...folder.paths].filter(([path])=>!path.includes('/')&&/\.vistas-workspace(?: \(\d+\))?\.json$/i.test(path));
+    if(!workspaces.length){
+      notify('Put the .vistas-workspace.json file at the top of the folder containing your source data, then choose that folder.');
+      return;
+    }
+    if(workspaces.length===1){open(workspaces[0][1],folder);return;}
+    const dialog=$('chooseWorkspace'),list=$('workspaceChoices');
+    list.replaceChildren();
+    for(const [path,file] of workspaces){
+      const button=document.createElement('button');
+      button.type='button';button.className='button secondary';button.textContent=path;
+      button.onclick=()=>{dialog.close();open(file,folder);};
+      list.append(button);
+    }
+    dialog.addEventListener('close',()=>list.replaceChildren(),{once:true});
+    dialog.showModal();
+  };
   $('openWorkspace').onclick=async()=>{
     if(busy)return;
     try{
-      if(window.showOpenFilePicker){const [handle]=await window.showOpenFilePicker({types:[{description:'Views & Vistas workspace',accept:{'application/json':['.json']}}]});await open(await handle.getFile());}
+      if(useNativePickers&&window.showOpenFilePicker){const [handle]=await window.showOpenFilePicker({types:[{description:'Views & Vistas workspace',accept:{'application/json':['.json']}}]});await open(await handle.getFile());}
       else $('workspaceInput').click();
-    }catch(error){if(error.name!=='AbortError')notify(error.message);}
+    }catch(error){if(error.name!=='AbortError')offerStandard($('workspaceInput'),$('workspaceFeedback'),error);}
   };
   $('workspaceInput').onchange=()=>{const file=$('workspaceInput').files?.[0];$('workspaceInput').value='';if(file)open(file);};
   return {open,store};

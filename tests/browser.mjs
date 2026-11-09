@@ -3,9 +3,10 @@ import {createRequire} from 'node:module';
 import {execFileSync} from 'node:child_process';
 import {createServer} from 'node:http';
 import {createReadStream,existsSync} from 'node:fs';
-import {readdir,stat,mkdir} from 'node:fs/promises';
+import {readdir,stat,mkdir,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {checkPortable} from './portable-browser.mjs';
 import {checkWorkspace} from './workspace-browser.mjs';
 
 const require=createRequire(import.meta.url);
@@ -47,7 +48,7 @@ await mkdir(artifacts,{recursive:true});
 const mime={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.jpg':'image/jpeg','.zip':'application/zip'};
 const server=createServer(async(req,res)=>{
   try {
-    const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
+    const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname).replace(/^\/panorama-explorer(?=\/)/,'');
     const file=path.resolve(root,'.'+(pathname==='/'?'/index.html':pathname));
     if(!file.startsWith(root+path.sep))throw new Error('Invalid path');
     const info=await stat(file);if(!info.isFile())throw new Error('Not a file');
@@ -69,6 +70,7 @@ try {
     const decode=window.createImageBitmap;
     window.createImageBitmap=function(...args){if(args[0] instanceof File)window.photoDecodes++;return decode.apply(this,args);};
   });
+  await page.route('**/cdn.jsdelivr.net/**',route=>route.abort());
   await page.goto('http://127.0.0.1:'+server.address().port);
   await page.evaluate(async()=>{window.vistas=await import('/js/app.js');});
   await page.waitForFunction(()=>{const s=window.vistas.state;return !!s.map?.getLayer('vistas-points');});
@@ -96,6 +98,7 @@ try {
     await page.mouse.move(1,1);assert.equal(await page.locator('#vistas-tooltip').isVisible(),false);
   }
   await page.getByRole('button',{name:'Done',exact:true}).click();
+  await checkPortable(browser,page.url());
   if(spatial&&photoFolder) {
     await page.locator('#importBtn').click();
     await page.locator('#spatialInput').setInputFiles(path.resolve(root,spatial));
@@ -277,6 +280,7 @@ try {
   assert.deepEqual(errors,[]);
   console.log('Browser integration passed; screenshots: '+artifacts);
 }catch(error){
+  await writeFile(path.join(artifacts,'failure.txt'),String(error.stack||error));
   console.error('Browser diagnostics:',errors,page?await page.evaluate(()=>({state:document.documentElement.dataset.appState,message:document.getElementById('toastRegion')?.textContent})).catch(()=>null):null);
   throw error;
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
